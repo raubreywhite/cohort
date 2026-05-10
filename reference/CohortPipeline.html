@@ -604,12 +604,9 @@ plot is drawn on the active device.</p></dd>
 </div><p></p><hr><a id="method-CohortPipeline-plot"></a><div class="section">
 <h3 id="method-plot-">Method <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code><a class="anchor" aria-label="anchor" href="#method-plot-"></a></h3>
 <p>Plot a CONSORT diagram of the cohort tree.</p>
-<p>With no arguments, plots one panel per <strong>frozen</strong> cohort (a cohort
-that has been branched from or has an artifact attached — see the
-freeze rule in the class description). If no cohorts are frozen
-yet, falls back to plotting every cohort. Each panel walks the
-root-to-cohort path automatically and uses cohort names as box
-labels. With one or more cohort names, plots only those.</p>
+<p>With no arguments, plots one panel per cohort. Each panel walks
+the root-to-cohort path automatically and uses cohort names as
+box labels. With one or more cohort names, plots only those.</p>
 <p>This is the default convenience entry point. Use
 <code>$draw_consort_panels()</code> for custom labels or layouts.</p><div class="section">
 <h4 id="usage-18">Usage<a class="anchor" aria-label="anchor" href="#usage-18"></a></h4>
@@ -628,8 +625,7 @@ labels. With one or more cohort names, plots only those.</p>
 <h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohorts</code></dt>
 <dd><p>Optional character vector of cohort names. If
-omitted, every frozen cohort is plotted (or every cohort if
-none are frozen).</p></dd>
+omitted, every cohort is plotted.</p></dd>
 
 
 <dt><code>file</code></dt>

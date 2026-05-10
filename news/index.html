@@ -82,7 +82,7 @@
 <li>
 <code>$get_everyone()</code> reconstructs a per-branch full view (rows + a <code>.cohort_status</code> column) so the returned object is meaningful for any branch in the tree.</li>
 <li>
-<code>$plot()</code> defaults to plotting every frozen cohort, falling back to every cohort when none are frozen yet.</li>
+<code>$plot()</code> defaults to plotting every cohort regardless of freeze state, so unfrozen leaf cohorts (the typical analytic endpoint) are always shown.</li>
 </ul></div>
 </div>
   </div>

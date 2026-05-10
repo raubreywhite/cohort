@@ -276,14 +276,15 @@ validates after).</p>
 <h2 id="consort-diagrams">CONSORT diagrams<a class="anchor" aria-label="anchor" href="#consort-diagrams"></a>
 </h2>
 <p>The simplest way to draw CONSORT diagrams is <code>$plot()</code>.
-With no arguments it auto-discovers every frozen cohort and renders one
-panel per root-to-cohort path; cohort names become box labels.</p>
+With no arguments it renders one panel per cohort, walking the
+root-to-cohort path; cohort names become box labels.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort_files/figure-html/consort-1.png" class="r-plt" alt="" width="85%" style="display: block; margin: auto;"></p>
 <p>You can name specific cohorts:</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"adults_grp_a"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="cohort_files/figure-html/unnamed-chunk-11-1.png" class="r-plt" alt="" width="85%" style="display: block; margin: auto;"></p>
 <p>Or save to disk:</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span>file <span class="op">=</span> <span class="st">"Figure_1_CONSORT.pdf"</span><span class="op">)</span></span></code></pre></div>

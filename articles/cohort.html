@@ -293,6 +293,63 @@ use <code>$draw_consort_panels()</code> (see
 <code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code>).</p>
 </div>
 <div class="section level2">
+<h2 id="incremental-caching">Incremental caching<a class="anchor" aria-label="anchor" href="#incremental-caching"></a>
+</h2>
+<p>For long-running scripts, supply a <code>cache_file</code> to
+<code>CohortPipeline$new()</code> to enable incremental re-execution. On
+the first run, a snapshot of the pipeline is written to disk; on
+subsequent runs, the snapshot is loaded and each operation in the script
+is replayed against it. Operations matching the cached log are no-ops
+(cursor advances, no work); divergent operations truncate the log and
+recompute only the affected cohort and its descendants.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">d</span>, cache_file <span class="op">=</span> <span class="st">"cache/cp.rds"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="va">cp</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>, <span class="st">"is.na(sex)"</span><span class="op">)</span></span>
+<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,    <span class="st">"age &lt; 18"</span><span class="op">)</span></span>
+<span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
+<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span></code></pre></div>
+<p>Cache hits compare:</p>
+<table class="table">
+<thead><tr class="header">
+<th>Method</th>
+<th>Cache key</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>exclude_and_track</code></td>
+<td><code>(branch, reason, expr_str)</code></td>
+</tr>
+<tr class="even">
+<td><code>new_cohort</code></td>
+<td><code>(name, from)</code></td>
+</tr>
+<tr class="odd">
+<td><code>declare_schema</code></td>
+<td>overwrites; not cached</td>
+</tr>
+<tr class="even">
+<td><code>set_artifact</code></td>
+<td><code>(name, from, body(fn), argset)</code></td>
+</tr>
+</tbody>
+</table>
+<p>For <code>set_artifact</code>, the 3-argument form
+<code>function(dt, sib, argset)</code> is recommended when caching: the
+<code>argset</code> list carries the data dependencies explicitly and
+participates in the cache key, so changing
+e.g. <code>argset = list(washout = 84L)</code> to
+<code>washout = 90L</code> triggers a recompute. The 2-argument form
+<code>function(dt, sib)</code> still works but won’t catch
+closure-captured changes.</p>
+<p>The cache key uses <code>body(fn)</code> literally; if
+<code>fn</code> calls a helper that you change, the cache cannot detect
+that. Either include a version tag in <code>argset</code>, or call
+<code>cp$invalidate(cohort)</code> to drop the cohort and force
+recompute.</p>
+</div>
+<div class="section level2">
 <h2 id="mutation-contract-summary">Mutation contract (summary)<a class="anchor" aria-label="anchor" href="#mutation-contract-summary"></a>
 </h2>
 <table class="table">

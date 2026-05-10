@@ -58,8 +58,8 @@
 <ul><li>
 <code><a href="https://rdrr.io/r/base/load.html" class="external-link">load()</a></code> is no longer a public method; the constructor is the only way to install the base data. Use <code>CohortPipeline$new(dt)</code> (with optional <code>cache_file</code>).</li>
 <li>
-<code>CohortPipeline$new()</code> and <code>new_cohort()</code> accept a <code>label =</code> argument: a human-readable display label used by CONSORT diagrams and <code>list_cohorts()</code>. Cohort identifiers (<code>"root"</code>, <code>"adults_female"</code>) remain how you reference cohorts in code; labels are presentation only.</li>
-<li>Re-issuing <code>new_cohort()</code> with a different label silently updates the field without invalidating the cache.</li>
+<code>CohortPipeline$new()</code> and <code>$new_cohort()</code> accept a <code>label =</code> argument: a human-readable display label used by CONSORT diagrams and <code>$list_cohorts()</code>. Cohort identifiers (<code>"root"</code>, <code>"adults_female"</code>) remain how you reference cohorts in code; labels are presentation only.</li>
+<li>Re-issuing <code>$new_cohort()</code> with a different label silently updates the field without invalidating the cache.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="incremental-caching-new-2026-5-10">Incremental caching (new)<a class="anchor" aria-label="anchor" href="#incremental-caching-new-2026-5-10"></a></h3>
@@ -69,7 +69,7 @@
 <code>set_artifact()</code> gains an <code>argset</code> parameter and accepts the new 3-argument fn signature <code>function(dt, sib, argset)</code>. The cache key is <code>(name, from, body(fn), argset)</code>. The legacy <code>function(dt, sib)</code> signature is still accepted (compat shim).</li>
 <li>New <code>cp$invalidate(cohort, artifact)</code> to manually drop a cached cohort or artifact when a helper changes that the cache key cannot detect.</li>
 <li>
-<code>new_cohort(name, from)</code> is now idempotent on identical (name, parent) pairs (required for cache replay). It still errors loudly if the same name is reissued with a different parent.</li>
+<code>$new_cohort(name, from)</code> is now idempotent on identical (name, parent) pairs (required for cache replay). It still errors loudly if the same name is reissued with a different parent.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="branding-2026-5-10">Branding<a class="anchor" aria-label="anchor" href="#branding-2026-5-10"></a></h3>

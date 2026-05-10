@@ -718,38 +718,50 @@ is dropped.</p></dd>
 
     <div id="ref-examples">
     <h2>Examples</h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"data.table"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span></span>
-<span class="r-in"><span>  <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span></span>
-<span class="r-in"><span>    id  <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span></span>
-<span class="r-in"><span>    age <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">17</span>, <span class="fl">22</span>, <span class="fl">35</span>, <span class="cn">NA</span>, <span class="fl">41</span>, <span class="fl">28</span>, <span class="fl">19</span>, <span class="fl">16</span>, <span class="fl">67</span>, <span class="fl">50</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>    sex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="cn">NA</span>, <span class="st">"M"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="st">"M"</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span> <span class="op">&lt;-</span> <span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Root-level exclusions on the shared base</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>,     <span class="st">"is.na(sex)"</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing age"</span>,     <span class="st">"is.na(age)"</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,        <span class="st">"age &lt; 18"</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Branch into an "adults_female" cohort</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="co"># Cache a derived artifact on the cohort</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="st">"mean_age"</span>, from <span class="op">=</span> <span class="st">"adults_female"</span>,</span></span>
-<span class="r-in"><span>    fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">dt</span>, <span class="va">sib</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dt</span><span class="op">$</span><span class="va">age</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">list_cohorts</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">consort</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"mean_age"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Attaching package: ‘data.table’</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> The following object is masked from ‘package:base’:</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>     %notin%</span>
+<span class="r-in"><span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  id  <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span></span>
+<span class="r-in"><span>  age <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">17</span>, <span class="fl">22</span>, <span class="fl">35</span>, <span class="cn">NA</span>, <span class="fl">41</span>, <span class="fl">28</span>, <span class="fl">19</span>, <span class="fl">16</span>, <span class="fl">67</span>, <span class="fl">50</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  sex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="cn">NA</span>, <span class="st">"M"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="st">"M"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Root-level exclusions on the shared base</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>,     <span class="st">"is.na(sex)"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing age"</span>,     <span class="st">"is.na(age)"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,        <span class="st">"age &lt; 18"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Branch into an "adults_female" cohort</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Cache a derived artifact on the cohort</span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="st">"mean_age"</span>, from <span class="op">=</span> <span class="st">"adults_female"</span>,</span></span>
+<span class="r-in"><span>  fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">dt</span>, <span class="va">sib</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dt</span><span class="op">$</span><span class="va">age</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">list_cohorts</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             name parent n_total n_included n_excluded n_own_steps n_artifacts</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           &lt;char&gt; &lt;char&gt;   &lt;int&gt;      &lt;int&gt;      &lt;int&gt;       &lt;int&gt;       &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:          root   &lt;NA&gt;      10          6          4           3           0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2: adults_female   root      10          2          8           1           1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    frozen</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    &lt;lgcl&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:   TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:   TRUE</span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">consort</span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           branch parent  step      reason   expr_str n_excluded n_remaining</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>           &lt;char&gt; &lt;char&gt; &lt;int&gt;      &lt;char&gt;     &lt;char&gt;      &lt;int&gt;       &lt;int&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1:          root   &lt;NA&gt;     1 Missing sex is.na(sex)          1           9</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2:          root   &lt;NA&gt;     2 Missing age is.na(age)          1           8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3:          root   &lt;NA&gt;     3    Under 18   age &lt; 18          2           6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4: adults_female   root     4  Not female sex != 'F'          4           2</span>
+<span class="r-in"><span><span class="va">cp</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"mean_age"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 51</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

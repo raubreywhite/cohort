@@ -61,18 +61,24 @@
 <li>Per-step exclusion logging via <code>$exclude_and_track(branch, reason, expr_str)</code>.</li>
 <li>Cached derived artifacts via <code>$set_artifact(name, from, fn)</code>.</li>
 <li>Schema validation via <code>$declare_schema()</code> and <code>$validate()</code>.</li>
-<li>CONSORT diagram generation via <code>$draw_consort_panels()</code>.</li>
+<li>CONSORT diagram generation via <code>$plot()</code> (auto-discovered) or <code>$draw_consort_panels()</code> (manual layouts).</li>
 </ul></li>
 </ul></div>
 <div class="section level3">
+<h3 id="the-freeze-rule-2026-5-10">The freeze rule<a class="anchor" aria-label="anchor" href="#the-freeze-rule-2026-5-10"></a></h3>
+<p>A cohort becomes <strong>frozen</strong> the first time another cohort branches from it, or the first time an artifact is set on it. After freezing, <code>$exclude_and_track()</code> on that cohort errors. The rule guarantees a cohort’s name maps to exactly one definition forever and that cached artifacts stay consistent with the included rows that produced them. Multi-way forks are unaffected.</p>
+</div>
+<div class="section level3">
 <h3 id="implementation-notes-2026-5-10">Implementation notes<a class="anchor" aria-label="anchor" href="#implementation-notes-2026-5-10"></a></h3>
-<ul><li>Shared base table + per-branch integer index of included rows. Branching is O(1) memory; full deep copies of the data table are avoided.</li>
+<ul><li>Shared base table + per-branch integer index of included rows. Branching never copies the data values.</li>
 <li>Integer status codes (per branch) replace in-band string status columns. The user’s data table is never mutated.</li>
 <li>Exclusion logs accumulate in a list and materialize on read, avoiding quadratic <code>rbind</code> growth.</li>
 <li>
-<code>$get_included()</code> always returns an independent copy, so callers may mutate it freely without affecting the shared base or any other cohort.</li>
+<code>$get_included()</code> always returns an independent copy.</li>
 <li>
 <code>$get_everyone()</code> reconstructs a per-branch full view (rows + a <code>.cohort_status</code> column) so the returned object is meaningful for any branch in the tree.</li>
+<li>
+<code>$plot()</code> defaults to plotting every frozen cohort, falling back to every cohort when none are frozen yet.</li>
 </ul></div>
 </div>
   </div>

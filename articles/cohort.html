@@ -140,8 +140,22 @@ included on the branch.</p>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, <span class="st">"Group not a"</span>, <span class="st">"grp != 'a'"</span><span class="op">)</span></span></code></pre></div>
 <p>A branch starts identical to its parent at the moment of branching.
-Subsequent exclusions on the parent never propagate to a child; sibling
-branches evolve independently.</p>
+Sibling branches evolve independently.</p>
+</div>
+<div class="section level3">
+<h3 id="the-freeze-rule">The freeze rule<a class="anchor" aria-label="anchor" href="#the-freeze-rule"></a>
+</h3>
+<p>A cohort becomes <strong>frozen</strong> the first time either:</p>
+<ol style="list-style-type: decimal">
+<li>another cohort branches from it, or</li>
+<li>an artifact is set on it.</li>
+</ol>
+<p>After freezing, <code>$exclude_and_track()</code> on that cohort
+errors. The rule guarantees that a cohort’s name maps to one definition
+forever: once children depend on it, its exclusion list is fixed. The
+practical workflow is “apply all exclusions on a cohort, then branch
+from it or attach artifacts.” Multi-way forks are unaffected — you can
+branch a frozen cohort as many times as you like.</p>
 </div>
 <div class="section level3">
 <h3 id="step-4-derive-cached-artifacts">Step 4: derive cached artifacts<a class="anchor" aria-label="anchor" href="#step-4-derive-cached-artifacts"></a>
@@ -191,6 +205,11 @@ off the <code>sib</code> argument:</p>
 <span><span class="co">#&gt; 1:          root   &lt;NA&gt;     200        181         19           3           0</span></span>
 <span><span class="co">#&gt; 2: adults_female   root     200         88        112           1           2</span></span>
 <span><span class="co">#&gt; 3:  adults_grp_a   root     200         88        112           1           0</span></span>
+<span><span class="co">#&gt;    frozen</span></span>
+<span><span class="co">#&gt;    &lt;lgcl&gt;</span></span>
+<span><span class="co">#&gt; 1:   TRUE</span></span>
+<span><span class="co">#&gt; 2:   TRUE</span></span>
+<span><span class="co">#&gt; 3:  FALSE</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">consort</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt;           branch parent  step      reason   expr_str n_excluded n_remaining</span></span>
 <span><span class="co">#&gt;           &lt;char&gt; &lt;char&gt; &lt;int&gt;      &lt;char&gt;     &lt;char&gt;      &lt;int&gt;       &lt;int&gt;</span></span>
@@ -256,23 +275,21 @@ validates after).</p>
 <div class="section level2">
 <h2 id="consort-diagrams">CONSORT diagrams<a class="anchor" aria-label="anchor" href="#consort-diagrams"></a>
 </h2>
-<p><code>$draw_consort_panels()</code> renders one or more CONSORT
-panels using the <code>consort</code> package. Each panel walks a
-sequence of cohort names; their exclusion steps become bullet blocks on
-the spine.</p>
+<p>The simplest way to draw CONSORT diagrams is <code>$plot()</code>.
+With no arguments it auto-discovers every frozen cohort and renders one
+panel per root-to-cohort path; cohort names become box labels.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">draw_consort_panels</span><span class="op">(</span></span>
-<span>  panels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    <span class="st">"Adult-female analytic chain"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
-<span>      <span class="st">"All participants"</span> <span class="op">=</span> <span class="st">"root"</span>,</span>
-<span>      <span class="st">"Adult females"</span>    <span class="op">=</span> <span class="st">"adults_female"</span></span>
-<span>    <span class="op">)</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort_files/figure-html/consort-1.png" class="r-plt" alt="" width="85%" style="display: block; margin: auto;"></p>
-<p>To save to disk, pass <code>file = "Figure_1_CONSORT.pdf"</code>
-(<code>.pdf</code> and <code>.png</code> are supported). The same call
-accepts a list of panels for multi-panel figures.</p>
+<p>You can name specific cohorts:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"adults_grp_a"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>Or save to disk:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span>file <span class="op">=</span> <span class="st">"Figure_1_CONSORT.pdf"</span><span class="op">)</span></span></code></pre></div>
+<p>For full control over labels, panel titles, side branches and layout,
+use <code>$draw_consort_panels()</code> (see
+<code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code>).</p>
 </div>
 <div class="section level2">
 <h2 id="mutation-contract-summary">Mutation contract (summary)<a class="anchor" aria-label="anchor" href="#mutation-contract-summary"></a>

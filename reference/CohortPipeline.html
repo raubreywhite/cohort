@@ -84,6 +84,20 @@ included and which step excluded them. Branching is therefore O(n) in
 the number of rows of the base table and never copies the data values,
 so deep cohort trees stay flat in memory.</p>
     </div>
+    <div id="freeze-rule">
+    <h2>Freeze rule</h2>
+
+
+<p>A cohort becomes <strong>frozen</strong> the first time either:</p><ol><li><p>another cohort branches from it (via <code>$new_cohort(from = X)</code>), or</p></li>
+<li><p>an artifact is set on it (via <code>$set_artifact(from = X)</code>).</p></li>
+</ol><p>After freezing, <code>$exclude_and_track()</code> on that cohort errors. The rule
+guarantees that a cohort's name maps to exactly one definition forever:
+once children depend on it, its exclusion list is fixed, and any
+cached artifact stays consistent with the included rows that produced
+it. The practical workflow is "apply all exclusions on a cohort, then
+branch from it or attach artifacts." Multi-way forks are unaffected:
+you can branch a frozen cohort as many times as you like.</p>
+    </div>
     <div id="mutation-contract">
     <h2>Mutation contract</h2>
 
@@ -157,6 +171,7 @@ serializable and auditable.</p>
 <li><p><a href="#method-CohortPipeline-list_artifacts"><code>CohortPipeline$list_artifacts()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-consort"><code>CohortPipeline$consort()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-draw_consort_panels"><code>CohortPipeline$draw_consort_panels()</code></a></p></li>
+<li><p><a href="#method-CohortPipeline-plot"><code>CohortPipeline$plot()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-print"><code>CohortPipeline$print()</code></a></p></li>
 </ul></div><p></p><hr><a id="method-CohortPipeline-new"></a><div class="section">
 <h3 id="method-new-">Method <code>new()</code><a class="anchor" aria-label="anchor" href="#method-new-"></a></h3>
@@ -530,7 +545,11 @@ parent, not duplicated).</p><div class="section">
 <h3 id="method-draw-consort-panels-">Method <code>draw_consort_panels()</code><a class="anchor" aria-label="anchor" href="#method-draw-consort-panels-"></a></h3>
 <p>Render one or more CONSORT panels for cohort flows. Each panel
 walks a sequence of cohort names, lumping the named cohorts'
-exclusion steps into bullet blocks.</p><div class="section">
+exclusion steps into bullet blocks.</p>
+<p>Most users want <code>$plot()</code> instead, which auto-discovers every
+root-to-leaf path in the tree and lays them out automatically.
+<code>$draw_consort_panels()</code> is the manual escape hatch for custom
+layouts and labels.</p><div class="section">
 <h4 id="usage-17">Usage<a class="anchor" aria-label="anchor" href="#usage-17"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">draw_consort_panels</span><span class="op">(</span></span>
 <span>  <span class="va">panels</span>,</span>
@@ -582,16 +601,64 @@ plot is drawn on the active device.</p></dd>
 <p>A list of grobs (invisibly).</p>
 </div>
 
-</div><p></p><hr><a id="method-CohortPipeline-print"></a><div class="section">
-<h3 id="method-print-">Method <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code><a class="anchor" aria-label="anchor" href="#method-print-"></a></h3>
-<p>Concise text summary of the cohort tree, exclusion counts, and
-attached artifacts.</p><div class="section">
+</div><p></p><hr><a id="method-CohortPipeline-plot"></a><div class="section">
+<h3 id="method-plot-">Method <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code><a class="anchor" aria-label="anchor" href="#method-plot-"></a></h3>
+<p>Plot a CONSORT diagram of the cohort tree.</p>
+<p>With no arguments, plots one panel per <strong>frozen</strong> cohort (a cohort
+that has been branched from or has an artifact attached — see the
+freeze rule in the class description). If no cohorts are frozen
+yet, falls back to plotting every cohort. Each panel walks the
+root-to-cohort path automatically and uses cohort names as box
+labels. With one or more cohort names, plots only those.</p>
+<p>This is the default convenience entry point. Use
+<code>$draw_consort_panels()</code> for custom labels or layouts.</p><div class="section">
 <h4 id="usage-18">Usage<a class="anchor" aria-label="anchor" href="#usage-18"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">print</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span></span>
+<span>  cohorts <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  file <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  ncol <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  width <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  height <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  text_width <span class="op">=</span> <span class="fl">40</span>,</span>
+<span>  title_fontsize <span class="op">=</span> <span class="fl">14</span></span>
+<span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div>
 
 <div class="section">
 <h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
+<p></p><div class="arguments"><dl><dt><code>cohorts</code></dt>
+<dd><p>Optional character vector of cohort names. If
+omitted, every frozen cohort is plotted (or every cohort if
+none are frozen).</p></dd>
+
+
+<dt><code>file</code></dt>
+<dd><p>Optional <code>.pdf</code>/<code>.png</code> path. If supplied, the plot is
+written to that file. Otherwise it is drawn on the active device.</p></dd>
+
+
+<dt><code>ncol, width, height, text_width, title_fontsize</code></dt>
+<dd><p>Optional layout
+overrides; see <code>$draw_consort_panels()</code>.</p></dd>
+
+
+</dl><p></p></div>
+</div>
+<div class="section">
+<h4 id="returns-18">Returns<a class="anchor" aria-label="anchor" href="#returns-18"></a></h4>
+<p>A list of grobs (invisibly).</p>
+</div>
+
+</div><p></p><hr><a id="method-CohortPipeline-print"></a><div class="section">
+<h3 id="method-print-">Method <code><a href="https://rdrr.io/r/base/print.html" class="external-link">print()</a></code><a class="anchor" aria-label="anchor" href="#method-print-"></a></h3>
+<p>Concise text summary of the cohort tree, exclusion counts, and
+attached artifacts.</p><div class="section">
+<h4 id="usage-19">Usage<a class="anchor" aria-label="anchor" href="#usage-19"></a></h4>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">print</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
+</div>
+
+<div class="section">
+<h4 id="arguments-13">Arguments<a class="anchor" aria-label="anchor" href="#arguments-13"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Unused.</p></dd>
 
@@ -599,7 +666,7 @@ attached artifacts.</p><div class="section">
 </dl><p></p></div>
 </div>
 <div class="section">
-<h4 id="returns-18">Returns<a class="anchor" aria-label="anchor" href="#returns-18"></a></h4>
+<h4 id="returns-19">Returns<a class="anchor" aria-label="anchor" href="#returns-19"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 

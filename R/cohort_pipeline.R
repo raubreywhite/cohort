@@ -9,10 +9,9 @@
 #' and serve as the auditable record of how the analytic dataset was
 #' constructed.
 #'
-#' The class is designed to feed analytic data tables into downstream
-#' orchestration packages such as 'plnr'. Cohort construction is kept
-#' strictly upstream of analysis. See `vignette("cohort", package = "cohort")`
-#' for a worked example.
+#' Cohort construction is kept strictly upstream of analysis: the class
+#' produces analytic data tables that downstream code can consume. See
+#' `vignette("cohort", package = "cohort")` for a worked example.
 #'
 #' @section Storage strategy:
 #' A `CohortPipeline` stores a single shared base data table and, for each
@@ -24,9 +23,9 @@
 #' @section Mutation contract:
 #' - `$load(dt)` makes a defensive copy of `dt` once. The user's data table
 #'   is never modified.
-#' - `$get_included(cohort)` defaults to returning an independent copy.
-#'   With `copy = FALSE` it returns a row-subset view of the shared base
-#'   table that callers must treat as read-only.
+#' - `$get_included(cohort)` returns an independent copy. The caller may
+#'   mutate it freely without affecting any other cohort or the shared
+#'   base table.
 #' - The data table passed to a `$set_artifact()` callback is always an
 #'   independent copy. Callbacks may mutate it freely.
 #' - `$get_everyone(cohort)` returns an independent copy with a
@@ -39,7 +38,7 @@
 #' - `$exclude_and_track(branch, reason, expr_str)` -- apply a string-form
 #'   predicate and log the exclusion.
 #' - `$set_artifact(name, from, fn)` -- cache a derived object on a cohort.
-#' - `$get_included(cohort, copy = TRUE)` -- included rows of a cohort.
+#' - `$get_included(cohort)` -- included rows of a cohort.
 #' - `$get_everyone(cohort)` -- full-cohort view with a reconstructed
 #'   `.cohort_status` column.
 #' - `$get_artifact(cohort, name)` -- retrieve a cached artifact.
@@ -187,7 +186,7 @@ CohortPipeline <- R6::R6Class(
           errors <- c(errors, sprintf("[%s] Branch not found", branch))
           next
         }
-        dt <- self$get_included(branch, copy = FALSE)
+        dt <- self$get_included(branch)
         for (col_name in names(schema)) {
           spec <- schema[[col_name]]
           if (!col_name %in% names(dt)) {
@@ -357,7 +356,7 @@ CohortPipeline <- R6::R6Class(
         stop("set_artifact: artifact '", name, "' already exists on cohort '",
           from, "'.", call. = FALSE)
       }
-      result <- fn(self$get_included(from, copy = TRUE), node$artifacts)
+      result <- fn(self$get_included(from), node$artifacts)
       node$artifacts[[name]] <- result
       private$nodes[[from]] <- node
       if (private$auto_validate) self$validate()
@@ -365,23 +364,18 @@ CohortPipeline <- R6::R6Class(
     },
 
     #' @description
-    #' Return the included rows of a cohort.
+    #' Return an independent copy of the included rows of a cohort. The
+    #' returned `data.table` may be mutated freely without affecting the
+    #' shared base table or any other cohort.
     #' @param cohort Character. Cohort name.
-    #' @param copy Logical. If `TRUE` (the default), an independent copy
-    #'   is returned and the caller may mutate it freely. If `FALSE`, a
-    #'   row-subset of the shared base table is returned; the caller must
-    #'   treat the result as read-only because mutating it can corrupt
-    #'   the base.
     #' @return A `data.table`.
-    get_included = function(cohort, copy = TRUE) {
+    get_included = function(cohort) {
       if (!cohort %in% names(private$nodes)) {
         stop("get_included: unknown cohort '", cohort, "'.", call. = FALSE)
       }
       node <- private$nodes[[cohort]]
       idx <- which(node$status == 0L)
-      out <- private$base_dt[idx]
-      if (isTRUE(copy)) out <- data.table::copy(out)
-      out
+      data.table::copy(private$base_dt[idx])
     },
 
     #' @description

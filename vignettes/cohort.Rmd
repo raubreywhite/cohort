@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 `cohort` provides the `CohortPipeline` R6 class for building analytic
 cohorts with full provenance. Cohort construction is kept strictly upstream
 of analysis: the pipeline produces analytic data tables, then hands them
-off — typically into a `plnr::Plan`.
+off to whatever consumes them downstream.
 
 ## A worked example
 
@@ -125,19 +125,21 @@ cp$consort()
 across every branch. Each branch contributes only its own steps; steps
 inherited from a parent at branch time are reported under the parent.
 
-### Step 6: hand off to plnr
+### Step 6: hand off downstream
 
-The bulk-ingest helper `add_data_from_cohort()` registers a cohort's
-artifacts on a `plnr::Plan` as named data entries. Each entry is named
-`paste0(prefix, cohort, "__", artifact)`.
+Cached artifacts are plain R objects — pull them out with
+`$get_artifact()` and pass them to whatever consumes the analytic data.
 
-```{r, eval = requireNamespace("plnr", quietly = TRUE)}
-plan <- plnr::Plan$new()
-add_data_from_cohort(plan, cp, cohort = "adults_female")
-plan$get_data()
+```{r}
+analytic_dt <- cp$get_artifact("adults_female", "dt_for_analysis")
+baseline    <- cp$get_artifact("adults_female", "baseline_table")
+
+head(analytic_dt)
+baseline
 ```
 
-You can now `add_argset()` and `add_analysis()` on the plan as usual.
+If you use an analysis-orchestration package, register each artifact as
+a named data entry — typically one short loop over `cp$list_artifacts()`.
 
 ## Schemas
 
@@ -163,26 +165,28 @@ site (every `$new_cohort()` and `$set_artifact()` call validates after).
 `consort` package. Each panel walks a sequence of cohort names; their
 exclusion steps become bullet blocks on the spine.
 
-```r
+```{r consort, fig.width = 7, fig.height = 6, fig.align = "center", out.width = "85%"}
 cp$draw_consort_panels(
   panels = list(
-    "Primary analytic chain" = c(
+    "Adult-female analytic chain" = c(
       "All participants" = "root",
       "Adult females"    = "adults_female"
     )
-  ),
-  file = "Figure_1_CONSORT.pdf"
+  )
 )
 ```
 
+To save to disk, pass `file = "Figure_1_CONSORT.pdf"` (`.pdf` and
+`.png` are supported). The same call accepts a list of panels for
+multi-panel figures.
+
 ## Mutation contract (summary)
 
-| Method                                | Returns                      | Mutation safe?       |
-|---------------------------------------|------------------------------|----------------------|
-| `$get_included(c)` / `copy = TRUE`    | Independent copy             | Yes                  |
-| `$get_included(c, copy = FALSE)`      | Row-subset of base           | **No** — read-only   |
-| Callback in `$set_artifact`           | Independent copy of subset   | Yes                  |
-| `$get_everyone(c)`                    | Independent copy + status    | Yes                  |
+| Method                       | Returns                    | Mutation safe? |
+|------------------------------|----------------------------|----------------|
+| `$get_included(c)`           | Independent copy           | Yes            |
+| Callback in `$set_artifact`  | Independent copy of subset | Yes            |
+| `$get_everyone(c)`           | Independent copy + status  | Yes            |
 
 Operations that go through the public API never modify the user's input
 data table or another branch.

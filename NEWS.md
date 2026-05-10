@@ -10,7 +10,6 @@ Initial release.
   - Cached derived artifacts via `$set_artifact(name, from, fn)`.
   - Schema validation via `$declare_schema()` and `$validate()`.
   - CONSORT diagram generation via `$draw_consort_panels()`.
-- `add_data_from_cohort()` — bulk-ingest cohort artifacts into a `plnr::Plan`.
 
 ## Implementation notes
 
@@ -20,9 +19,8 @@ Initial release.
   The user's data table is never mutated.
 - Exclusion logs accumulate in a list and materialize on read, avoiding
   quadratic `rbind` growth.
-- `$get_included()` defaults to returning an independent copy. An opt-in
-  `copy = FALSE` path returns a view of the shared base; callers must
-  treat the result as read-only.
+- `$get_included()` always returns an independent copy, so callers may
+  mutate it freely without affecting the shared base or any other cohort.
 - `$get_everyone()` reconstructs a per-branch full view (rows + a
   `.cohort_status` column) so the returned object is meaningful for any
   branch in the tree.

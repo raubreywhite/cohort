@@ -64,9 +64,9 @@ test_that("new_cohort creates an independent branch", {
   expect_equal(cp$n_included("females"), 5L)
 })
 
-test_that("get_included(copy = TRUE) is independent of the base", {
+test_that("get_included returns an independent copy", {
   cp <- CohortPipeline$new(make_test_dt())
-  out <- cp$get_included("root", copy = TRUE)
+  out <- cp$get_included("root")
   out[, age := age * 0]
   expect_equal(cp$get_included("root")$age[1], 17)
 })
@@ -181,16 +181,3 @@ test_that("predicate length mismatch is reported clearly", {
   )
 })
 
-test_that("add_data_from_cohort registers each artifact on the plan", {
-  skip_if_not_installed("plnr")
-  cp <- CohortPipeline$new(make_test_dt())
-  cp$set_artifact("dt", from = "root", fn = function(dt, sib) dt)
-  cp$set_artifact("n",  from = "root", fn = function(dt, sib) nrow(dt))
-
-  plan <- plnr::Plan$new()
-  add_data_from_cohort(plan, cp, cohort = "root")
-
-  d <- plan$get_data()
-  expect_equal(d$root__n, 10L)
-  expect_true(is.data.table(d$root__dt))
-})

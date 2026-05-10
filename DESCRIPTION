@@ -7,11 +7,10 @@ Authors@R: c(
 Description: A framework for building analytic cohorts with full provenance.
     Supports branched cohort trees, per-step exclusion logging with
     human-readable reasons, schema validation at branch boundaries, cached
-    derived artifacts on each cohort, and CONSORT diagram generation. Designed
-    to feed analytic data tables into downstream orchestration packages such
-    as 'plnr', the framework cleanly separates cohort definition from
-    analysis. A shared-base storage strategy keeps memory flat as the cohort
-    tree grows.
+    derived artifacts on each cohort, and CONSORT diagram generation. The
+    framework cleanly separates cohort definition from analysis: it produces
+    analytic data tables that downstream packages can consume. A shared-base
+    storage strategy keeps memory flat as the cohort tree grows.
 License: MIT + file LICENSE
 URL: https://www.rwhite.no/cohort/, https://github.com/raubreywhite/cohort
 BugReports: https://github.com/raubreywhite/cohort/issues
@@ -29,7 +28,6 @@ Imports:
     utils
 Suggests:
     knitr,
-    plnr,
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

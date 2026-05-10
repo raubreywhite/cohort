@@ -12,10 +12,9 @@ subjects affected -- so the resulting object can drive a CONSORT diagram
 and serve as the auditable record of how the analytic dataset was
 constructed.
 
-The class is designed to feed analytic data tables into downstream
-orchestration packages such as 'plnr'. Cohort construction is kept
-strictly upstream of analysis. See \code{vignette("cohort", package = "cohort")}
-for a worked example.
+Cohort construction is kept strictly upstream of analysis: the class
+produces analytic data tables that downstream code can consume. See
+\code{vignette("cohort", package = "cohort")} for a worked example.
 }
 \section{Storage strategy}{
 
@@ -31,9 +30,9 @@ so deep cohort trees stay flat in memory.
 \itemize{
 \item \verb{$load(dt)} makes a defensive copy of \code{dt} once. The user's data table
 is never modified.
-\item \verb{$get_included(cohort)} defaults to returning an independent copy.
-With \code{copy = FALSE} it returns a row-subset view of the shared base
-table that callers must treat as read-only.
+\item \verb{$get_included(cohort)} returns an independent copy. The caller may
+mutate it freely without affecting any other cohort or the shared
+base table.
 \item The data table passed to a \verb{$set_artifact()} callback is always an
 independent copy. Callbacks may mutate it freely.
 \item \verb{$get_everyone(cohort)} returns an independent copy with a
@@ -50,7 +49,7 @@ vector.
 \item \verb{$exclude_and_track(branch, reason, expr_str)} -- apply a string-form
 predicate and log the exclusion.
 \item \verb{$set_artifact(name, from, fn)} -- cache a derived object on a cohort.
-\item \verb{$get_included(cohort, copy = TRUE)} -- included rows of a cohort.
+\item \verb{$get_included(cohort)} -- included rows of a cohort.
 \item \verb{$get_everyone(cohort)} -- full-cohort view with a reconstructed
 \code{.cohort_status} column.
 \item \verb{$get_artifact(cohort, name)} -- retrieve a cached artifact.
@@ -341,21 +340,17 @@ The pipeline (invisibly).
 \if{html}{\out{<a id="method-CohortPipeline-get_included"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_included}{}}}
 \subsection{Method \code{get_included()}}{
-Return the included rows of a cohort.
+Return an independent copy of the included rows of a cohort. The
+returned \code{data.table} may be mutated freely without affecting the
+shared base table or any other cohort.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_included(cohort, copy = TRUE)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_included(cohort)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{cohort}}{Character. Cohort name.}
-
-\item{\code{copy}}{Logical. If \code{TRUE} (the default), an independent copy
-is returned and the caller may mutate it freely. If \code{FALSE}, a
-row-subset of the shared base table is returned; the caller must
-treat the result as read-only because mutating it can corrupt
-the base.}
 }
 \if{html}{\out{</div>}}
 }

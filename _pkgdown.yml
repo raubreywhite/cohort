@@ -6,7 +6,11 @@ reference:
   contents:
     - CohortPipeline
 
-- title: "Integration"
-  desc: "Bulk-handoff helpers for downstream orchestration packages."
-  contents:
-    - add_data_from_cohort
+authors:
+  footer:
+    roles: [cre, aut]
+    text: "Crafted by"
+  sidebar:
+    roles: [cre, aut, cph]
+  Richard Aubrey White:
+    href: "https://www.rwhite.no"

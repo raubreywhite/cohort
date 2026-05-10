@@ -7,10 +7,8 @@ provenance: branched cohort trees, per-step exclusion logging, schema
 validation at branch boundaries, cached derived artifacts, and CONSORT
 diagram generation.
 
-The companion package
-[`plnr`](https://www.rwhite.no/plnr/) handles the downstream
-orchestration; `cohort` produces the analytic data tables that `plnr`
-consumes.
+The framework cleanly separates cohort definition from analysis: it
+produces analytic data tables that downstream code consumes.
 
 ## Installation
 
@@ -63,23 +61,14 @@ cp$consort()
 #> 4: adults_female  root    4   Not female sex != 'F'          1           5
 ```
 
-Pass cohort artifacts straight into a `plnr::Plan`:
-
-```r
-library(plnr)
-
-cp$set_artifact("dt_analysis", from = "adults_female",
-  fn = function(dt, sib) dt)
-
-plan <- Plan$new()
-add_data_from_cohort(plan, cp, cohort = "adults_female")
-```
+Cached artifacts are plain R objects — retrieve them with
+`cp$get_artifact("adults_female", "<artifact>")` and pass them
+straight into whatever consumes analytic data.
 
 ## Documentation
 
 - [Introduction vignette](https://www.rwhite.no/cohort/articles/cohort.html)
 - `?CohortPipeline` for the full method reference
-- [`plnr` package](https://www.rwhite.no/plnr/)
 
 ## Design
 

@@ -34,8 +34,8 @@
         gp = grid::gpar(fontsize = title_fontsize, fontface = "bold")
       ),
       grid::editGrob(body_grob, vp = grid::viewport(
-        x = 0.5, y = 0.48, width = 0.86, height = 0.93,
-        just = c("center", "center")
+        x = 0.5, y = 0.95, width = 0.86, height = 0.93,
+        just = c("center", "top")
       ))
     ))
   })

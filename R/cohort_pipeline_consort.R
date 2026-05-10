@@ -1,11 +1,13 @@
 # CONSORT plotting helpers for CohortPipeline.
 #
-# Kept in a separate file from the class definition so the plotting code
-# is easy to locate and test. The public entry point is the class method
+# Renders cohort flows as CONSORT diagrams using grid graphics directly.
+# The public entry point is the class method
 # CohortPipeline$draw_consort_panels(); these functions implement it.
 #
-# Read-only access to the internal node store is passed in as the `nodes`
-# argument, so this file does not depend on R6 private state.
+# Layout works in millimetres throughout: positions and box sizes are
+# computed once in mm, then drawn into a viewport whose native scale is
+# also mm. The panel grob therefore has an intrinsic size that the
+# enclosing layout can stretch or letterbox.
 
 #' @keywords internal
 .draw_consort_panels_impl <- function(panels, nodes, file = NULL,
@@ -16,7 +18,7 @@
       call. = FALSE)
   }
 
-  panel_grobs <- lapply(seq_along(panels), function(i) {
+  layouts <- lapply(seq_along(panels), function(i) {
     spec  <- panels[[i]]
     title <- names(panels)[i] %||% sprintf("Panel %d", i)
     if (is.list(spec) && !is.null(spec$flow)) {
@@ -26,34 +28,22 @@
       flow <- spec
       sb   <- list()
     }
-    body <- .build_consort_obj(flow, sb, nodes, text_width)
-    body_grob <- grid::grid.grabExpr(plot(body, grViz = FALSE), warn = 0)
-    grid::gTree(children = grid::gList(
-      grid::textGrob(
-        title, x = 0.5, y = 0.985, hjust = 0.5, vjust = 1,
-        gp = grid::gpar(fontsize = title_fontsize, fontface = "bold")
-      ),
-      grid::editGrob(body_grob, vp = grid::viewport(
-        x = 0.5, y = 0.95, width = 0.86, height = 0.93,
-        just = c("center", "top")
-      ))
-    ))
+    rows <- .panel_rows(flow, sb, nodes, text_width = text_width)
+    list(title = title, layout = .layout_panel(rows))
   })
 
   ncol_use <- ncol %||% length(panels)
   nrow_use <- ceiling(length(panels) / ncol_use)
-  width_use <- width %||% (6 * ncol_use)
 
-  content_rows <- vapply(panels, function(p) {
-    fl <- if (is.list(p) && !is.null(p$flow)) p$flow else p
-    cohort_rows <- length(fl) + 1L
-    bullet_rows <- sum(vapply(unname(fl), function(co) {
-      nd <- nodes[[co]]
-      if (is.null(nd)) 0L else .own_log_n(nd)
-    }, integer(1L)))
-    cohort_rows + bullet_rows
-  }, integer(1L))
-  height_use <- height %||% max(9, 2 + 0.55 * max(content_rows) * nrow_use)
+  # Device size: fit the largest panel, then arrange in a grid.
+  max_w_mm <- max(vapply(layouts, function(p) p$layout$total_w, 0))
+  max_h_mm <- max(vapply(layouts, function(p) p$layout$total_h, 0))
+  width_use  <- width  %||% max(6, ncol_use * (max_w_mm / 25.4) + 0.5)
+  height_use <- height %||% max(6, nrow_use * (max_h_mm / 25.4) + 0.7)
+
+  panel_grobs <- lapply(layouts, function(p) {
+    .panel_grob(p$layout, p$title, title_fontsize = title_fontsize)
+  })
 
   if (!is.null(file)) {
     ext <- tools::file_ext(file)
@@ -102,12 +92,12 @@
   }))
 }
 
-# Build a `consort` object from a flow specification. Walks `flow`
-# (named character vector of cohort names), lumps consecutive
-# exclusions into bullet blocks, and supports identity-only side
-# branches that merge into the main spine.
+# Walk a flow specification and emit an ordered list of plain box
+# records ready for layout. Each row is list(type, text); spine rows
+# are the vertical column, side rows are the exclusion bullet boxes
+# placed to the right of the gap above the next spine box.
 #' @keywords internal
-.build_consort_obj <- function(flow, side_branches, nodes, text_width = 40) {
+.panel_rows <- function(flow, side_branches, nodes, text_width = 40) {
   fmt <- function(n) format(n, big.mark = ",")
   split_label <- function(label, n_val) {
     n_line <- sprintf("(n = %s)", fmt(n_val))
@@ -138,13 +128,12 @@
   }
   attach_keys <- names(identity_merges)
 
-  g <- NULL
-  add_main <- function(lbl) {
-    if (is.null(g)) g <<- consort::add_box(txt = lbl)
-    else            g <<- consort::add_box(prev_box = g, txt = lbl)
+  rows <- list()
+  add_spine <- function(text) {
+    rows[[length(rows) + 1L]] <<- list(type = "spine", text = text)
   }
-  add_side <- function(lbl) {
-    g <<- consort::add_side_box(prev_box = g, txt = lbl)
+  add_side <- function(text) {
+    rows[[length(rows) + 1L]] <<- list(type = "side",  text = text)
   }
 
   for (fi in seq_along(flow)) {
@@ -157,13 +146,15 @@
     }
     log_       <- .own_log(node)
     br_n_final <- sum(node$status == 0L)
+
     if (fi == 1L) {
       n_total <- if (is.na(node$parent)) length(node$status) else node$branched_at_n
       tot_merge <- identity_merges[[as.character(n_total)]]
       lbl <- split_label("Cohort participants", n_total)
       if (!is.null(tot_merge)) lbl <- paste0(lbl, "\n", tot_merge$name)
-      add_main(lbl)
+      add_spine(lbl)
     }
+
     if (nrow(log_) > 0L) {
       chunk_boundaries <- c(
         which(as.character(log_$n_remaining) %in% attach_keys),
@@ -192,11 +183,192 @@
         } else {
           main_lbl <- sprintf("n = %s", fmt(final_n))
         }
-        add_main(main_lbl)
+        add_spine(main_lbl)
       }
     } else if (fi > 1L) {
-      add_main(split_label(br_label, br_n_final))
+      add_spine(split_label(br_label, br_n_final))
     }
   }
-  g
+
+  rows
+}
+
+# Wrap text at the given character width, preserving \n-separated
+# paragraphs. Returns a single string with line breaks.
+#' @keywords internal
+.wrap_text <- function(text, width) {
+  if (length(text) == 0L || !nzchar(text)) return("")
+  paragraphs <- strsplit(text, "\n", fixed = TRUE)[[1L]]
+  wrapped <- unlist(lapply(paragraphs, function(p) {
+    if (!nzchar(p)) return("")
+    strwrap(p, width = width)
+  }))
+  paste(wrapped, collapse = "\n")
+}
+
+# Lay out a list of row records into mm coordinates. Returns a list
+# with `rows` (each augmented with cx, cy, w, h, lines), `arrows`
+# (list of segments), `total_w`, `total_h`, `spine_cx`, `side_cx`.
+# Coordinates use a top-down y axis (y = 0 at the top).
+#' @keywords internal
+.layout_panel <- function(rows,
+                          pad_h = 2.0, pad_v = 1.5,
+                          line_h = 4.5, char_w = 2.0,
+                          min_v_gap = 8.0, h_gap = 8.0,
+                          v_pad_in_gap = 2.0,
+                          title_pad = 8.0, margin = 4.0,
+                          text_width = 40) {
+  rows <- lapply(rows, function(r) {
+    wrapped <- .wrap_text(r$text, text_width)
+    lines   <- strsplit(wrapped, "\n", fixed = TRUE)[[1L]]
+    if (length(lines) == 0L) lines <- ""
+    r$lines   <- lines
+    r$n_lines <- length(lines)
+    r$max_chars <- max(nchar(lines))
+    r$h <- r$n_lines * line_h + 2 * pad_v
+    r$w <- r$max_chars * char_w + 2 * pad_h
+    r
+  })
+
+  events <- list()
+  i <- 1L
+  while (i <= length(rows)) {
+    if (rows[[i]]$type == "spine") {
+      ev <- list(spine = rows[[i]])
+      if (i + 1L <= length(rows) && rows[[i + 1L]]$type == "side") {
+        ev$side <- rows[[i + 1L]]
+        i <- i + 2L
+      } else {
+        i <- i + 1L
+      }
+      events[[length(events) + 1L]] <- ev
+    } else {
+      i <- i + 1L
+    }
+  }
+
+  spine_w <- max(vapply(events, function(e) e$spine$w, 0))
+  side_ws <- vapply(events, function(e) {
+    if (is.null(e$side)) 0 else e$side$w
+  }, 0)
+  side_w  <- max(side_ws, 0)
+  has_side <- side_w > 0
+
+  spine_cx <- margin + spine_w / 2
+  side_cx  <- if (has_side) margin + spine_w + h_gap + side_w / 2 else NA_real_
+  panel_w  <- spine_w + (if (has_side) h_gap + side_w else 0) + 2 * margin
+
+  y <- title_pad + margin
+  laid_rows <- list()
+  arrows    <- list()
+  prev_spine <- NULL
+
+  for (k in seq_along(events)) {
+    sp <- events[[k]]$spine
+    sp$cx <- spine_cx
+    sp$cy <- y + sp$h / 2
+    sp$y_top <- y
+    sp$y_bot <- y + sp$h
+    laid_rows[[length(laid_rows) + 1L]] <- sp
+
+    if (!is.null(prev_spine)) {
+      arrows[[length(arrows) + 1L]] <- list(
+        x0 = spine_cx, y0 = prev_spine$y_bot,
+        x1 = spine_cx, y1 = sp$y_top,
+        kind = "spine"
+      )
+    }
+
+    if (!is.null(events[[k]]$side)) {
+      sd <- events[[k]]$side
+      gap <- max(min_v_gap, sd$h + 2 * v_pad_in_gap)
+      mid_y <- sp$y_bot + gap / 2
+      sd$cx <- side_cx
+      sd$cy <- mid_y
+      sd$y_top <- mid_y - sd$h / 2
+      sd$y_bot <- mid_y + sd$h / 2
+      laid_rows[[length(laid_rows) + 1L]] <- sd
+
+      arrows[[length(arrows) + 1L]] <- list(
+        x0 = spine_cx, y0 = mid_y,
+        x1 = side_cx - sd$w / 2, y1 = mid_y,
+        kind = "side"
+      )
+
+      y <- sp$y_bot + gap
+    } else if (k < length(events)) {
+      y <- sp$y_bot + min_v_gap
+    } else {
+      y <- sp$y_bot
+    }
+    prev_spine <- sp
+  }
+
+  total_h <- y + margin
+  list(
+    rows     = laid_rows,
+    arrows   = arrows,
+    total_w  = panel_w,
+    total_h  = total_h,
+    spine_cx = spine_cx,
+    side_cx  = side_cx,
+    title_y  = margin + title_pad / 2
+  )
+}
+
+# Build a gTree for one panel from its layout. Coordinates are in mm
+# via a viewport with an explicit native scale.
+#' @keywords internal
+.panel_grob <- function(layout, title,
+                        title_fontsize = 14, box_fontsize = 10) {
+  vp <- grid::viewport(
+    xscale = c(0, layout$total_w),
+    yscale = c(layout$total_h, 0)
+  )
+
+  children <- list()
+  add <- function(g) {
+    children[[length(children) + 1L]] <<- g
+  }
+
+  add(grid::textGrob(
+    title,
+    x = grid::unit(layout$total_w / 2, "native"),
+    y = grid::unit(layout$title_y, "native"),
+    just = c("center", "center"),
+    gp = grid::gpar(fontsize = title_fontsize, fontface = "bold")
+  ))
+
+  for (r in layout$rows) {
+    add(grid::rectGrob(
+      x = grid::unit(r$cx, "native"),
+      y = grid::unit(r$cy, "native"),
+      width  = grid::unit(r$w, "native"),
+      height = grid::unit(r$h, "native"),
+      just = "center",
+      gp = grid::gpar(fill = "white", col = "black", lwd = 1)
+    ))
+    add(grid::textGrob(
+      paste(r$lines, collapse = "\n"),
+      x = grid::unit(r$cx, "native"),
+      y = grid::unit(r$cy, "native"),
+      just = "center",
+      gp = grid::gpar(fontsize = box_fontsize, lineheight = 0.95)
+    ))
+  }
+
+  for (a in layout$arrows) {
+    add(grid::linesGrob(
+      x = grid::unit(c(a$x0, a$x1), "native"),
+      y = grid::unit(c(a$y0, a$y1), "native"),
+      arrow = grid::arrow(angle = 30,
+        length = grid::unit(2.2, "mm"), type = "closed"),
+      gp = grid::gpar(col = "black", fill = "black", lwd = 1)
+    ))
+  }
+
+  grid::gTree(
+    children = do.call(grid::gList, children),
+    vp = vp
+  )
 }

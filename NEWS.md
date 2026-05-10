@@ -41,3 +41,8 @@ Multi-way forks are unaffected.
 - `$plot()` defaults to plotting every cohort regardless of freeze
   state, so unfrozen leaf cohorts (the typical analytic endpoint) are
   always shown.
+- CONSORT rendering is now implemented directly in `grid` instead of
+  via the `consort` package. Arrows now terminate exactly at side-box
+  edges (the `consort` rendering placed them inside the box), and
+  multi-panel layouts top-align panel content. The `consort` package
+  has been dropped from `Imports`.

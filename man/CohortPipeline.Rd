@@ -75,8 +75,7 @@ predicate and log the exclusion.
 \item \verb{$declare_schema(branch, schema, from)}, \verb{$validate()} -- column
 contracts.
 \item \verb{$consort()} -- long-form exclusion log across all branches.
-\item \verb{$draw_consort_panels(panels, file)} -- render CONSORT diagrams via the
-\code{consort} package.
+\item \verb{$draw_consort_panels(panels, file)} -- render CONSORT diagrams.
 \item \verb{$print()} -- concise text summary of the cohort tree.
 }
 }

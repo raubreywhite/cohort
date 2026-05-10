@@ -178,7 +178,7 @@ The simplest way to draw CONSORT diagrams is `$plot()`. With no
 arguments it renders one panel per cohort, walking the root-to-cohort
 path; cohort names become box labels.
 
-```{r consort, fig.width = 7, fig.height = 6, fig.align = "center", out.width = "85%"}
+```{r consort, fig.width = 10, fig.height = 6, fig.align = "center", out.width = "85%"}
 cp$plot()
 ```
 

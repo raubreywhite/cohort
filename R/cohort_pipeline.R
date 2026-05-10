@@ -61,8 +61,7 @@
 #' - `$declare_schema(branch, schema, from)`, `$validate()` -- column
 #'   contracts.
 #' - `$consort()` -- long-form exclusion log across all branches.
-#' - `$draw_consort_panels(panels, file)` -- render CONSORT diagrams via the
-#'   `consort` package.
+#' - `$draw_consort_panels(panels, file)` -- render CONSORT diagrams.
 #' - `$print()` -- concise text summary of the cohort tree.
 #'
 #' @section Predicate strings:

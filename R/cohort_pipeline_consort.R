@@ -41,8 +41,12 @@
   width_use  <- width  %||% max(6, ncol_use * (max_w_mm / 25.4) + 0.5)
   height_use <- height %||% max(6, nrow_use * (max_h_mm / 25.4) + 0.7)
 
+  # Use the tallest panel's height as the common y-scale so each
+  # panel's content lands at the same y when the grobs are placed in
+  # equally sized cells of grid.arrange.
   panel_grobs <- lapply(layouts, function(p) {
-    .panel_grob(p$layout, p$title, title_fontsize = title_fontsize)
+    .panel_grob(p$layout, p$title,
+      title_fontsize = title_fontsize, common_h = max_h_mm)
   })
 
   if (!is.null(file)) {
@@ -317,13 +321,19 @@
 }
 
 # Build a gTree for one panel from its layout. Coordinates are in mm
-# via a viewport with an explicit native scale.
+# via a viewport with an explicit native scale. `common_h` (the max
+# total_h across all panels) keeps the y-axis consistent so panels
+# top-align in a multi-panel layout.
 #' @keywords internal
 .panel_grob <- function(layout, title,
-                        title_fontsize = 14, box_fontsize = 10) {
+                        title_fontsize = 14, box_fontsize = 10,
+                        common_h = NULL) {
+  pad_h <- 2.0  # must match .layout_panel's horizontal box padding
+  total_h <- common_h %||% layout$total_h
+
   vp <- grid::viewport(
     xscale = c(0, layout$total_w),
-    yscale = c(layout$total_h, 0)
+    yscale = c(total_h, 0)
   )
 
   children <- list()
@@ -348,13 +358,25 @@
       just = "center",
       gp = grid::gpar(fill = "white", col = "black", lwd = 1)
     ))
-    add(grid::textGrob(
-      paste(r$lines, collapse = "\n"),
-      x = grid::unit(r$cx, "native"),
-      y = grid::unit(r$cy, "native"),
-      just = "center",
-      gp = grid::gpar(fontsize = box_fontsize, lineheight = 0.95)
-    ))
+    if (identical(r$type, "side")) {
+      # Side boxes carry bullet lists. Render flush-left so each
+      # bullet's "-" lines up.
+      add(grid::textGrob(
+        paste(r$lines, collapse = "\n"),
+        x = grid::unit(r$cx - r$w / 2 + pad_h, "native"),
+        y = grid::unit(r$cy, "native"),
+        just = c("left", "center"),
+        gp = grid::gpar(fontsize = box_fontsize, lineheight = 0.95)
+      ))
+    } else {
+      add(grid::textGrob(
+        paste(r$lines, collapse = "\n"),
+        x = grid::unit(r$cx, "native"),
+        y = grid::unit(r$cy, "native"),
+        just = c("center", "center"),
+        gp = grid::gpar(fontsize = box_fontsize, lineheight = 0.95)
+      ))
+    }
   }
 
   for (a in layout$arrows) {

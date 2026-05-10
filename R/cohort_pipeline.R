@@ -20,6 +20,20 @@
 #' the number of rows of the base table and never copies the data values,
 #' so deep cohort trees stay flat in memory.
 #'
+#' @section Freeze rule:
+#' A cohort becomes **frozen** the first time either:
+#'
+#' 1. another cohort branches from it (via `$new_cohort(from = X)`), or
+#' 2. an artifact is set on it (via `$set_artifact(from = X)`).
+#'
+#' After freezing, `$exclude_and_track()` on that cohort errors. The rule
+#' guarantees that a cohort's name maps to exactly one definition forever:
+#' once children depend on it, its exclusion list is fixed, and any
+#' cached artifact stays consistent with the included rows that produced
+#' it. The practical workflow is "apply all exclusions on a cohort, then
+#' branch from it or attach artifacts." Multi-way forks are unaffected:
+#' you can branch a frozen cohort as many times as you like.
+#'
 #' @section Mutation contract:
 #' - `$load(dt)` makes a defensive copy of `dt` once. The user's data table
 #'   is never modified.
@@ -133,7 +147,8 @@ CohortPipeline <- R6::R6Class(
           log_entries         = list(),
           branched_at_log_len = 0L,
           branched_at_n       = n,
-          artifacts           = list()
+          artifacts           = list(),
+          frozen              = FALSE
         )
       )
       invisible(self)
@@ -263,8 +278,13 @@ CohortPipeline <- R6::R6Class(
         log_entries         = parent_node$log_entries,
         branched_at_log_len = length(parent_node$log_entries),
         branched_at_n       = sum(parent_node$status == 0L),
-        artifacts           = list()
+        artifacts           = list(),
+        frozen              = FALSE
       )
+      # Freeze the parent: branching from a cohort means its definition
+      # must not change again, otherwise sibling branches would have
+      # silently different parent states.
+      private$nodes[[from]]$frozen <- TRUE
       if (private$auto_validate) self$validate()
       invisible(self)
     },
@@ -287,6 +307,12 @@ CohortPipeline <- R6::R6Class(
       if (!is.character(expr_str) || length(expr_str) != 1L) {
         stop("exclude_and_track: 'expr_str' must be a single character string.",
           call. = FALSE)
+      }
+      if (isTRUE(private$nodes[[branch]]$frozen)) {
+        stop("exclude_and_track: cohort '", branch,
+          "' is frozen (already has children or artifacts). ",
+          "Apply all exclusions before branching from it or attaching ",
+          "artifacts.", call. = FALSE)
       }
       node <- private$nodes[[branch]]
       step_num <- length(node$log_entries) + 1L
@@ -358,6 +384,9 @@ CohortPipeline <- R6::R6Class(
       }
       result <- fn(self$get_included(from), node$artifacts)
       node$artifacts[[name]] <- result
+      # Freeze on first artifact: subsequent exclude_and_track would
+      # silently invalidate the cached value.
+      node$frozen <- TRUE
       private$nodes[[from]] <- node
       if (private$auto_validate) self$validate()
       invisible(self)
@@ -458,7 +487,8 @@ CohortPipeline <- R6::R6Class(
           n_included     = n_inc,
           n_excluded     = n_total - n_inc,
           n_own_steps    = own_n_steps,
-          n_artifacts    = length(node$artifacts)
+          n_artifacts    = length(node$artifacts),
+          frozen         = isTRUE(node$frozen)
         )
       }))
     },
@@ -524,6 +554,11 @@ CohortPipeline <- R6::R6Class(
     #' Render one or more CONSORT panels for cohort flows. Each panel
     #' walks a sequence of cohort names, lumping the named cohorts'
     #' exclusion steps into bullet blocks.
+    #'
+    #' Most users want `$plot()` instead, which auto-discovers every
+    #' root-to-leaf path in the tree and lays them out automatically.
+    #' `$draw_consort_panels()` is the manual escape hatch for custom
+    #' layouts and labels.
     #' @param panels A named list. Each element is either a character
     #'   vector of cohort names (interpreted as the panel's main flow)
     #'   or a list with components `flow` (character) and optional
@@ -543,6 +578,57 @@ CohortPipeline <- R6::R6Class(
       .draw_consort_panels_impl(
         panels         = panels,
         nodes          = private$nodes,
+        file           = file,
+        ncol           = ncol,
+        width          = width,
+        height         = height,
+        text_width     = text_width,
+        title_fontsize = title_fontsize
+      )
+    },
+
+    #' @description
+    #' Plot a CONSORT diagram of the cohort tree.
+    #'
+    #' With no arguments, plots one panel per **frozen** cohort (a cohort
+    #' that has been branched from or has an artifact attached — see the
+    #' freeze rule in the class description). If no cohorts are frozen
+    #' yet, falls back to plotting every cohort. Each panel walks the
+    #' root-to-cohort path automatically and uses cohort names as box
+    #' labels. With one or more cohort names, plots only those.
+    #'
+    #' This is the default convenience entry point. Use
+    #' `$draw_consort_panels()` for custom labels or layouts.
+    #' @param cohorts Optional character vector of cohort names. If
+    #'   omitted, every frozen cohort is plotted (or every cohort if
+    #'   none are frozen).
+    #' @param file Optional `.pdf`/`.png` path. If supplied, the plot is
+    #'   written to that file. Otherwise it is drawn on the active device.
+    #' @param ncol,width,height,text_width,title_fontsize Optional layout
+    #'   overrides; see `$draw_consort_panels()`.
+    #' @return A list of grobs (invisibly).
+    plot = function(cohorts = NULL, file = NULL, ncol = NULL,
+                    width = NULL, height = NULL,
+                    text_width = 40, title_fontsize = 14) {
+      if (length(private$nodes) == 0L) {
+        stop("plot: pipeline has no cohorts. Call $load(dt) first.",
+          call. = FALSE)
+      }
+      if (is.null(cohorts)) {
+        cohorts <- private$frozen_cohorts()
+        if (length(cohorts) == 0L) {
+          cohorts <- names(private$nodes)
+        }
+      } else {
+        unknown <- setdiff(cohorts, names(private$nodes))
+        if (length(unknown) > 0L) {
+          stop("plot: unknown cohort(s): ",
+            paste(unknown, collapse = ", "), call. = FALSE)
+        }
+      }
+      panels <- private$build_default_panels(cohorts)
+      self$draw_consort_panels(
+        panels         = panels,
         file           = file,
         ncol           = ncol,
         width          = width,
@@ -604,7 +690,49 @@ CohortPipeline <- R6::R6Class(
 
     # Read-only access to the shared base table for plotting helpers.
     get_base_dt = function() private$base_dt,
-    get_nodes   = function() private$nodes
+    get_nodes   = function() private$nodes,
+
+    # Names of leaf cohorts (cohorts with no children).
+    leaf_cohorts = function() {
+      parents <- vapply(private$nodes, function(n) {
+        if (is.null(n$parent) || is.na(n$parent)) NA_character_ else n$parent
+      }, character(1L))
+      has_child <- names(private$nodes) %in% parents
+      names(private$nodes)[!has_child]
+    },
+
+    # Names of frozen cohorts (children or artifacts attached).
+    frozen_cohorts = function() {
+      is_frozen <- vapply(private$nodes, function(n) isTRUE(n$frozen),
+        logical(1L))
+      names(private$nodes)[is_frozen]
+    },
+
+    # Build the panels list for $plot(). One panel per cohort, walking
+    # the root-to-cohort path. Box labels = cohort names; panel title =
+    # the leaf cohort name.
+    build_default_panels = function(cohorts) {
+      panels <- list()
+      for (co in cohorts) {
+        path <- private$ancestor_path(co)  # root-first character vector
+        names(path) <- path
+        panels[[co]] <- path
+      }
+      panels
+    },
+
+    # Walk parents from a cohort up to the root; return a root-first
+    # character vector.
+    ancestor_path = function(cohort) {
+      out <- character()
+      cur <- cohort
+      while (!is.null(cur) && !is.na(cur)) {
+        out <- c(cur, out)
+        parent <- private$nodes[[cur]]$parent
+        cur <- if (is.null(parent) || is.na(parent)) NULL else parent
+      }
+      out
+    }
   )
 )
 

@@ -45,23 +45,60 @@ test_that("NA predicate values are treated as FALSE (rows kept)", {
   expect_true(4L %in% cp$get_included("root")$id) # row 4 has NA age
 })
 
-test_that("new_cohort creates an independent branch", {
+test_that("new_cohort creates an independent branch and freezes the parent", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
 
   cp$new_cohort("females", from = "root")
   cp$exclude_and_track("females", "Not female", "sex != 'F'")
 
-  # Parent unchanged
+  # Parent unchanged by child operations
   expect_equal(cp$n_included("root"), 9L)
   # Child reflects further exclusion
   expect_equal(cp$n_included("females"), 5L)
   expect_setequal(cp$get_included("females")$sex, "F")
 
-  # Subsequent root-side exclusions do not propagate to the child.
-  cp$exclude_and_track("root", "Under 18", "age < 18")
-  expect_equal(cp$n_included("root"), 7L)
-  expect_equal(cp$n_included("females"), 5L)
+  # Multiple forks off the same parent are fine: the parent state stays
+  # the same and both children snapshot the same definition.
+  cp$new_cohort("males", from = "root")
+  expect_equal(cp$n_included("males"), 9L)
+})
+
+test_that("freeze rule: branching prevents further exclusions on the parent", {
+  cp <- CohortPipeline$new(make_test_dt())
+  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+  cp$new_cohort("child", from = "root")
+
+  expect_error(
+    cp$exclude_and_track("root", "Under 18", "age < 18"),
+    "frozen"
+  )
+})
+
+test_that("freeze rule: setting an artifact prevents further exclusions", {
+  cp <- CohortPipeline$new(make_test_dt())
+  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+  cp$set_artifact("n", from = "root", fn = function(dt, sib) nrow(dt))
+
+  expect_error(
+    cp$exclude_and_track("root", "Under 18", "age < 18"),
+    "frozen"
+  )
+
+  # Multiple artifacts on the same cohort are still allowed.
+  cp$set_artifact("ids", from = "root", fn = function(dt, sib) dt$id)
+  expect_equal(cp$get_artifact("root", "ids"), cp$get_included("root")$id)
+})
+
+test_that("freeze rule: list_cohorts reports the frozen flag", {
+  cp <- CohortPipeline$new(make_test_dt())
+  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+  cp$new_cohort("child", from = "root")
+
+  cohorts <- cp$list_cohorts()
+  expect_true("frozen" %in% names(cohorts))
+  expect_true(cohorts[name == "root", frozen])
+  expect_false(cohorts[name == "child", frozen])
 })
 
 test_that("get_included returns an independent copy", {
@@ -179,5 +216,29 @@ test_that("predicate length mismatch is reported clearly", {
     cp$exclude_and_track("root", "Bad", "TRUE"),  # length-1, not nrow
     "predicate returned length"
   )
+})
+
+test_that("plot() defaults to frozen cohorts and falls back to all", {
+  cp <- CohortPipeline$new(make_test_dt())
+  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+
+  # No frozen cohorts yet -- falls back to plotting every cohort.
+  pdf(file = tempfile(fileext = ".pdf"))
+  expect_silent(cp$plot())
+  dev.off()
+
+  # Once a fork happens, root is frozen; default plot draws frozen ones.
+  cp$new_cohort("child", from = "root")
+  pdf(file = tempfile(fileext = ".pdf"))
+  expect_silent(cp$plot())
+  dev.off()
+
+  # Explicit cohort selection still works.
+  pdf(file = tempfile(fileext = ".pdf"))
+  expect_silent(cp$plot(cohorts = "child"))
+  dev.off()
+
+  # Unknown cohort is rejected.
+  expect_error(cp$plot(cohorts = "missing"), "unknown cohort")
 })
 

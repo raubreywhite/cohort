@@ -75,8 +75,21 @@ cp$exclude_and_track("adults_grp_a", "Group not a", "grp != 'a'")
 ```
 
 A branch starts identical to its parent at the moment of branching.
-Subsequent exclusions on the parent never propagate to a child; sibling
-branches evolve independently.
+Sibling branches evolve independently.
+
+### The freeze rule
+
+A cohort becomes **frozen** the first time either:
+
+1. another cohort branches from it, or
+2. an artifact is set on it.
+
+After freezing, `$exclude_and_track()` on that cohort errors. The rule
+guarantees that a cohort's name maps to one definition forever: once
+children depend on it, its exclusion list is fixed. The practical
+workflow is "apply all exclusions on a cohort, then branch from it or
+attach artifacts." Multi-way forks are unaffected — you can branch a
+frozen cohort as many times as you like.
 
 ### Step 4: derive cached artifacts
 
@@ -161,24 +174,28 @@ site (every `$new_cohort()` and `$set_artifact()` call validates after).
 
 ## CONSORT diagrams
 
-`$draw_consort_panels()` renders one or more CONSORT panels using the
-`consort` package. Each panel walks a sequence of cohort names; their
-exclusion steps become bullet blocks on the spine.
+The simplest way to draw CONSORT diagrams is `$plot()`. With no
+arguments it auto-discovers every frozen cohort and renders one panel
+per root-to-cohort path; cohort names become box labels.
 
 ```{r consort, fig.width = 7, fig.height = 6, fig.align = "center", out.width = "85%"}
-cp$draw_consort_panels(
-  panels = list(
-    "Adult-female analytic chain" = c(
-      "All participants" = "root",
-      "Adult females"    = "adults_female"
-    )
-  )
-)
+cp$plot()
 ```
 
-To save to disk, pass `file = "Figure_1_CONSORT.pdf"` (`.pdf` and
-`.png` are supported). The same call accepts a list of panels for
-multi-panel figures.
+You can name specific cohorts:
+
+```r
+cp$plot(c("adults_female", "adults_grp_a"))
+```
+
+Or save to disk:
+
+```r
+cp$plot(file = "Figure_1_CONSORT.pdf")
+```
+
+For full control over labels, panel titles, side branches and layout,
+use `$draw_consort_panels()` (see `?CohortPipeline`).
 
 ## Mutation contract (summary)
 

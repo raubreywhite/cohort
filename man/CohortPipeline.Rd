@@ -25,6 +25,23 @@ the number of rows of the base table and never copies the data values,
 so deep cohort trees stay flat in memory.
 }
 
+\section{Freeze rule}{
+
+A cohort becomes \strong{frozen} the first time either:
+\enumerate{
+\item another cohort branches from it (via \verb{$new_cohort(from = X)}), or
+\item an artifact is set on it (via \verb{$set_artifact(from = X)}).
+}
+
+After freezing, \verb{$exclude_and_track()} on that cohort errors. The rule
+guarantees that a cohort's name maps to exactly one definition forever:
+once children depend on it, its exclusion list is fixed, and any
+cached artifact stays consistent with the included rows that produced
+it. The practical workflow is "apply all exclusions on a cohort, then
+branch from it or attach artifacts." Multi-way forks are unaffected:
+you can branch a frozen cohort as many times as you like.
+}
+
 \section{Mutation contract}{
 
 \itemize{
@@ -127,6 +144,7 @@ if (requireNamespace("data.table", quietly = TRUE)) {
 \item \href{#method-CohortPipeline-list_artifacts}{\code{CohortPipeline$list_artifacts()}}
 \item \href{#method-CohortPipeline-consort}{\code{CohortPipeline$consort()}}
 \item \href{#method-CohortPipeline-draw_consort_panels}{\code{CohortPipeline$draw_consort_panels()}}
+\item \href{#method-CohortPipeline-plot}{\code{CohortPipeline$plot()}}
 \item \href{#method-CohortPipeline-print}{\code{CohortPipeline$print()}}
 }
 }
@@ -495,6 +513,11 @@ A \code{data.table} with columns \code{branch}, \code{parent}, \code{step},
 Render one or more CONSORT panels for cohort flows. Each panel
 walks a sequence of cohort names, lumping the named cohorts'
 exclusion steps into bullet blocks.
+
+Most users want \verb{$plot()} instead, which auto-discovers every
+root-to-leaf path in the tree and lays them out automatically.
+\verb{$draw_consort_panels()} is the manual escape hatch for custom
+layouts and labels.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$draw_consort_panels(
   panels,
@@ -527,6 +550,52 @@ plot is drawn on the active device.}
 \item{\code{text_width}}{Integer. Wrap width for box text.}
 
 \item{\code{title_fontsize}}{Numeric. Title fontsize for each panel.}
+}
+\if{html}{\out{</div>}}
+}
+\subsection{Returns}{
+A list of grobs (invisibly).
+}
+}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-CohortPipeline-plot"></a>}}
+\if{latex}{\out{\hypertarget{method-CohortPipeline-plot}{}}}
+\subsection{Method \code{plot()}}{
+Plot a CONSORT diagram of the cohort tree.
+
+With no arguments, plots one panel per \strong{frozen} cohort (a cohort
+that has been branched from or has an artifact attached — see the
+freeze rule in the class description). If no cohorts are frozen
+yet, falls back to plotting every cohort. Each panel walks the
+root-to-cohort path automatically and uses cohort names as box
+labels. With one or more cohort names, plots only those.
+
+This is the default convenience entry point. Use
+\verb{$draw_consort_panels()} for custom labels or layouts.
+\subsection{Usage}{
+\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$plot(
+  cohorts = NULL,
+  file = NULL,
+  ncol = NULL,
+  width = NULL,
+  height = NULL,
+  text_width = 40,
+  title_fontsize = 14
+)}\if{html}{\out{</div>}}
+}
+
+\subsection{Arguments}{
+\if{html}{\out{<div class="arguments">}}
+\describe{
+\item{\code{cohorts}}{Optional character vector of cohort names. If
+omitted, every frozen cohort is plotted (or every cohort if
+none are frozen).}
+
+\item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If supplied, the plot is
+written to that file. Otherwise it is drawn on the active device.}
+
+\item{\code{ncol, width, height, text_width, title_fontsize}}{Optional layout
+overrides; see \verb{$draw_consort_panels()}.}
 }
 \if{html}{\out{</div>}}
 }

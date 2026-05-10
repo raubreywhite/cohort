@@ -81,8 +81,8 @@
 <p><code>cohort</code> provides the <code>CohortPipeline</code> R6 class
 for building analytic cohorts with full provenance. Cohort construction
 is kept strictly upstream of analysis: the pipeline produces analytic
-data tables, then hands them off — typically into a
-<code><a href="https://www.rwhite.no/plnr/reference/Plan.html" class="external-link">plnr::Plan</a></code>.</p>
+data tables, then hands them off to whatever consumes them
+downstream.</p>
 <div class="section level2">
 <h2 id="a-worked-example">A worked example<a class="anchor" aria-label="anchor" href="#a-worked-example"></a>
 </h2>
@@ -205,129 +205,33 @@ own steps; steps inherited from a parent at branch time are reported
 under the parent.</p>
 </div>
 <div class="section level3">
-<h3 id="step-6-hand-off-to-plnr">Step 6: hand off to plnr<a class="anchor" aria-label="anchor" href="#step-6-hand-off-to-plnr"></a>
+<h3 id="step-6-hand-off-downstream">Step 6: hand off downstream<a class="anchor" aria-label="anchor" href="#step-6-hand-off-downstream"></a>
 </h3>
-<p>The bulk-ingest helper <code><a href="../reference/add_data_from_cohort.html">add_data_from_cohort()</a></code> registers
-a cohort’s artifacts on a <code><a href="https://www.rwhite.no/plnr/reference/Plan.html" class="external-link">plnr::Plan</a></code> as named data entries.
-Each entry is named
-<code>paste0(prefix, cohort, "__", artifact)</code>.</p>
+<p>Cached artifacts are plain R objects — pull them out with
+<code>$get_artifact()</code> and pass them to whatever consumes the
+analytic data.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu">plnr</span><span class="fu">::</span><span class="va"><a href="https://www.rwhite.no/plnr/reference/Plan.html" class="external-link">Plan</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/add_data_from_cohort.html">add_data_from_cohort</a></span><span class="op">(</span><span class="va">plan</span>, <span class="va">cp</span>, cohort <span class="op">=</span> <span class="st">"adults_female"</span><span class="op">)</span></span>
-<span><span class="va">plan</span><span class="op">$</span><span class="fu">get_data</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt; $adults_female__dt_for_analysis</span></span>
-<span><span class="co">#&gt;        id   age    sex    grp age_group</span></span>
-<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt; &lt;char&gt; &lt;char&gt;    &lt;fctr&gt;</span></span>
-<span><span class="co">#&gt;  1:     3    48      F      b     30-49</span></span>
-<span><span class="co">#&gt;  2:     5    28      F      a     18-29</span></span>
-<span><span class="co">#&gt;  3:     6    73      F      b       50+</span></span>
-<span><span class="co">#&gt;  4:     9    68      F      a       50+</span></span>
-<span><span class="co">#&gt;  5:    10    21      F      b     18-29</span></span>
-<span><span class="co">#&gt;  6:    14    58      F      a       50+</span></span>
-<span><span class="co">#&gt;  7:    22    58      F      b       50+</span></span>
-<span><span class="co">#&gt;  8:    23    54      F      b       50+</span></span>
-<span><span class="co">#&gt;  9:    25    39      F      a     30-49</span></span>
-<span><span class="co">#&gt; 10:    32    28      F      a     18-29</span></span>
-<span><span class="co">#&gt; 11:    36    36      F      b     30-49</span></span>
-<span><span class="co">#&gt; 12:    38    27      F      a     18-29</span></span>
-<span><span class="co">#&gt; 13:    39    54      F      a       50+</span></span>
-<span><span class="co">#&gt; 14:    43    27      F      b     18-29</span></span>
-<span><span class="co">#&gt; 15:    45    42      F      a     30-49</span></span>
-<span><span class="co">#&gt; 16:    46    62      F      a       50+</span></span>
-<span><span class="co">#&gt; 17:    47    47      F      b     30-49</span></span>
-<span><span class="co">#&gt; 18:    49    35      F      b     30-49</span></span>
-<span><span class="co">#&gt; 19:    50    45      F      b     30-49</span></span>
-<span><span class="co">#&gt; 20:    51    31      F      a     30-49</span></span>
-<span><span class="co">#&gt; 21:    52    62      F      a       50+</span></span>
-<span><span class="co">#&gt; 22:    55    65      F      a       50+</span></span>
-<span><span class="co">#&gt; 23:    64    43      F      b     30-49</span></span>
-<span><span class="co">#&gt; 24:    65    38      F      b     30-49</span></span>
-<span><span class="co">#&gt; 25:    67    62      F      b       50+</span></span>
-<span><span class="co">#&gt; 26:    68    53      F      b       50+</span></span>
-<span><span class="co">#&gt; 27:    69    38      F      b     30-49</span></span>
-<span><span class="co">#&gt; 28:    70    67      F      b       50+</span></span>
-<span><span class="co">#&gt; 29:    75    43      F      b     30-49</span></span>
-<span><span class="co">#&gt; 30:    76    36      F      a     30-49</span></span>
-<span><span class="co">#&gt; 31:    77    42      F      a     30-49</span></span>
-<span><span class="co">#&gt; 32:    80    60      F      b       50+</span></span>
-<span><span class="co">#&gt; 33:    81    65      F      b       50+</span></span>
-<span><span class="co">#&gt; 34:    83    63      F      a       50+</span></span>
-<span><span class="co">#&gt; 35:    84    74      F      b       50+</span></span>
-<span><span class="co">#&gt; 36:    86    63      F      b       50+</span></span>
-<span><span class="co">#&gt; 37:    87    64      F      a       50+</span></span>
-<span><span class="co">#&gt; 38:    88    21      F      b     18-29</span></span>
-<span><span class="co">#&gt; 39:    92    67      F      a       50+</span></span>
-<span><span class="co">#&gt; 40:    93    30      F      b     30-49</span></span>
-<span><span class="co">#&gt; 41:    95    62      F      a       50+</span></span>
-<span><span class="co">#&gt; 42:    97    58      F      a       50+</span></span>
-<span><span class="co">#&gt; 43:   106    30      F      b     30-49</span></span>
-<span><span class="co">#&gt; 44:   108    23      F      a     18-29</span></span>
-<span><span class="co">#&gt; 45:   109    64      F      b       50+</span></span>
-<span><span class="co">#&gt; 46:   115    26      F      a     18-29</span></span>
-<span><span class="co">#&gt; 47:   116    28      F      b     18-29</span></span>
-<span><span class="co">#&gt; 48:   117    30      F      a     30-49</span></span>
-<span><span class="co">#&gt; 49:   118    29      F      b     18-29</span></span>
-<span><span class="co">#&gt; 50:   120    79      F      b       50+</span></span>
-<span><span class="co">#&gt; 51:   121    31      F      b     30-49</span></span>
-<span><span class="co">#&gt; 52:   125    50      F      a       50+</span></span>
-<span><span class="co">#&gt; 53:   126    63      F      a       50+</span></span>
-<span><span class="co">#&gt; 54:   127    55      F      a       50+</span></span>
-<span><span class="co">#&gt; 55:   131    67      F      a       50+</span></span>
-<span><span class="co">#&gt; 56:   132    71      F      a       50+</span></span>
-<span><span class="co">#&gt; 57:   134    64      F      a       50+</span></span>
-<span><span class="co">#&gt; 58:   141    41      F      a     30-49</span></span>
-<span><span class="co">#&gt; 59:   142    55      F      a       50+</span></span>
-<span><span class="co">#&gt; 60:   143    29      F      a     18-29</span></span>
-<span><span class="co">#&gt; 61:   145    52      F      b       50+</span></span>
-<span><span class="co">#&gt; 62:   146    76      F      a       50+</span></span>
-<span><span class="co">#&gt; 63:   148    18      F      a     18-29</span></span>
-<span><span class="co">#&gt; 64:   149    49      F      a     30-49</span></span>
-<span><span class="co">#&gt; 65:   151    39      F      b     30-49</span></span>
-<span><span class="co">#&gt; 66:   154    42      F      a     30-49</span></span>
-<span><span class="co">#&gt; 67:   156    34      F      b     30-49</span></span>
-<span><span class="co">#&gt; 68:   157    43      F      b     30-49</span></span>
-<span><span class="co">#&gt; 69:   159    74      F      a       50+</span></span>
-<span><span class="co">#&gt; 70:   160    79      F      a       50+</span></span>
-<span><span class="co">#&gt; 71:   161    42      F      a     30-49</span></span>
-<span><span class="co">#&gt; 72:   162    45      F      a     30-49</span></span>
-<span><span class="co">#&gt; 73:   164    58      F      a       50+</span></span>
-<span><span class="co">#&gt; 74:   167    18      F      a     18-29</span></span>
-<span><span class="co">#&gt; 75:   168    67      F      a       50+</span></span>
-<span><span class="co">#&gt; 76:   170    51      F      b       50+</span></span>
-<span><span class="co">#&gt; 77:   175    64      F      a       50+</span></span>
-<span><span class="co">#&gt; 78:   179    52      F      a       50+</span></span>
-<span><span class="co">#&gt; 79:   180    29      F      a     18-29</span></span>
-<span><span class="co">#&gt; 80:   181    42      F      a     30-49</span></span>
-<span><span class="co">#&gt; 81:   187    37      F      a     30-49</span></span>
-<span><span class="co">#&gt; 82:   189    66      F      b       50+</span></span>
-<span><span class="co">#&gt; 83:   192    74      F      a       50+</span></span>
-<span><span class="co">#&gt; 84:   194    63      F      b       50+</span></span>
-<span><span class="co">#&gt; 85:   195    76      F      a       50+</span></span>
-<span><span class="co">#&gt; 86:   196    47      F      b     30-49</span></span>
-<span><span class="co">#&gt; 87:   197    49      F      b     30-49</span></span>
-<span><span class="co">#&gt; 88:   200    64      F      a       50+</span></span>
-<span><span class="co">#&gt;        id   age    sex    grp age_group</span></span>
-<span><span class="co">#&gt;     &lt;int&gt; &lt;int&gt; &lt;char&gt; &lt;char&gt;    &lt;fctr&gt;</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $adults_female__baseline_table</span></span>
+<code class="sourceCode R"><span><span class="va">analytic_dt</span> <span class="op">&lt;-</span> <span class="va">cp</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"dt_for_analysis"</span><span class="op">)</span></span>
+<span><span class="va">baseline</span>    <span class="op">&lt;-</span> <span class="va">cp</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"baseline_table"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">analytic_dt</span><span class="op">)</span></span>
+<span><span class="co">#&gt;       id   age    sex    grp age_group</span></span>
+<span><span class="co">#&gt;    &lt;int&gt; &lt;int&gt; &lt;char&gt; &lt;char&gt;    &lt;fctr&gt;</span></span>
+<span><span class="co">#&gt; 1:     3    48      F      b     30-49</span></span>
+<span><span class="co">#&gt; 2:     5    28      F      a     18-29</span></span>
+<span><span class="co">#&gt; 3:     6    73      F      b       50+</span></span>
+<span><span class="co">#&gt; 4:     9    68      F      a       50+</span></span>
+<span><span class="co">#&gt; 5:    10    21      F      b     18-29</span></span>
+<span><span class="co">#&gt; 6:    14    58      F      a       50+</span></span>
+<span><span class="va">baseline</span></span>
 <span><span class="co">#&gt;    age_group     N mean_age</span></span>
 <span><span class="co">#&gt;       &lt;fctr&gt; &lt;int&gt;    &lt;num&gt;</span></span>
 <span><span class="co">#&gt; 1:     18-29    14 25.14286</span></span>
 <span><span class="co">#&gt; 2:     30-49    30 39.80000</span></span>
-<span><span class="co">#&gt; 3:       50+    44 63.54545</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $hash</span></span>
-<span><span class="co">#&gt; $hash$current</span></span>
-<span><span class="co">#&gt; [1] "90be44eb2850da9d7b26bece73eaa1d6"</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $hash$current_elements</span></span>
-<span><span class="co">#&gt; $hash$current_elements$adults_female__dt_for_analysis</span></span>
-<span><span class="co">#&gt; [1] "36bd7a6934f78db857d00f670cc8a566"</span></span>
-<span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; $hash$current_elements$adults_female__baseline_table</span></span>
-<span><span class="co">#&gt; [1] "772f72fb0e6d7c9ac3b592fe6ee101b5"</span></span></code></pre></div>
-<p>You can now <code>add_argset()</code> and <code>add_analysis()</code>
-on the plan as usual.</p>
+<span><span class="co">#&gt; 3:       50+    44 63.54545</span></span></code></pre></div>
+<p>If you use an analysis-orchestration package, register each artifact
+as a named data entry — typically one short loop over
+<code>cp$list_artifacts()</code>.</p>
 </div>
 </div>
 <div class="section level2">
@@ -359,22 +263,25 @@ the spine.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">draw_consort_panels</span><span class="op">(</span></span>
 <span>  panels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    <span class="st">"Primary analytic chain"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>    <span class="st">"Adult-female analytic chain"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
 <span>      <span class="st">"All participants"</span> <span class="op">=</span> <span class="st">"root"</span>,</span>
 <span>      <span class="st">"Adult females"</span>    <span class="op">=</span> <span class="st">"adults_female"</span></span>
 <span>    <span class="op">)</span></span>
-<span>  <span class="op">)</span>,</span>
-<span>  file <span class="op">=</span> <span class="st">"Figure_1_CONSORT.pdf"</span></span>
+<span>  <span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+<p><img src="cohort_files/figure-html/consort-1.png" class="r-plt" alt="" width="85%" style="display: block; margin: auto;"></p>
+<p>To save to disk, pass <code>file = "Figure_1_CONSORT.pdf"</code>
+(<code>.pdf</code> and <code>.png</code> are supported). The same call
+accepts a list of panels for multi-panel figures.</p>
 </div>
 <div class="section level2">
 <h2 id="mutation-contract-summary">Mutation contract (summary)<a class="anchor" aria-label="anchor" href="#mutation-contract-summary"></a>
 </h2>
 <table class="table">
 <colgroup>
-<col width="42%">
-<col width="32%">
-<col width="24%">
+<col width="40%">
+<col width="37%">
+<col width="21%">
 </colgroup>
 <thead><tr class="header">
 <th>Method</th>
@@ -383,25 +290,17 @@ the spine.</p>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td>
-<code>$get_included(c)</code> / <code>copy = TRUE</code>
-</td>
+<td><code>$get_included(c)</code></td>
 <td>Independent copy</td>
 <td>Yes</td>
 </tr>
 <tr class="even">
-<td><code>$get_included(c, copy = FALSE)</code></td>
-<td>Row-subset of base</td>
-<td>
-<strong>No</strong> — read-only</td>
-</tr>
-<tr class="odd">
 <td>Callback in <code>$set_artifact</code>
 </td>
 <td>Independent copy of subset</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>$get_everyone(c)</code></td>
 <td>Independent copy + status</td>
 <td>Yes</td>
@@ -439,7 +338,7 @@ growth.</li>
 
       <footer><div class="copyright">
   <p></p>
-<p>Developed by Richard Aubrey White.</p>
+<p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.</p>
 </div>
 
 <div class="pkgdown">

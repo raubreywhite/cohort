@@ -63,8 +63,6 @@
 <li>Schema validation via <code>$declare_schema()</code> and <code>$validate()</code>.</li>
 <li>CONSORT diagram generation via <code>$draw_consort_panels()</code>.</li>
 </ul></li>
-<li>
-<code><a href="../reference/add_data_from_cohort.html">add_data_from_cohort()</a></code> — bulk-ingest cohort artifacts into a <code><a href="https://www.rwhite.no/plnr/reference/Plan.html" class="external-link">plnr::Plan</a></code>.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="implementation-notes-2026-5-10">Implementation notes<a class="anchor" aria-label="anchor" href="#implementation-notes-2026-5-10"></a></h3>
@@ -72,7 +70,7 @@
 <li>Integer status codes (per branch) replace in-band string status columns. The user’s data table is never mutated.</li>
 <li>Exclusion logs accumulate in a list and materialize on read, avoiding quadratic <code>rbind</code> growth.</li>
 <li>
-<code>$get_included()</code> defaults to returning an independent copy. An opt-in <code>copy = FALSE</code> path returns a view of the shared base; callers must treat the result as read-only.</li>
+<code>$get_included()</code> always returns an independent copy, so callers may mutate it freely without affecting the shared base or any other cohort.</li>
 <li>
 <code>$get_everyone()</code> reconstructs a per-branch full view (rows + a <code>.cohort_status</code> column) so the returned object is meaningful for any branch in the tree.</li>
 </ul></div>
@@ -87,7 +85,7 @@
 
 
       <footer><div class="copyright">
-  <p></p><p>Developed by Richard Aubrey White.</p>
+  <p></p><p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.</p>
 </div>
 
 <div class="pkgdown">

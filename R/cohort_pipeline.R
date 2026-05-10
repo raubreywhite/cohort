@@ -161,7 +161,7 @@ CohortPipeline <- R6::R6Class(
         cache_match <- TRUE
         dt_hash <- NULL
         if (!is.null(dt)) {
-          dt_hash <- digest::digest(dt)
+          dt_hash <- digest::digest(dt, algo = "spookyhash")
           cache_match <- identical(dt_hash, snap$base_dt_hash)
         }
         if (cache_match) {
@@ -187,7 +187,7 @@ CohortPipeline <- R6::R6Class(
         }
       } else if (!is.null(dt)) {
         private$install_base(dt, label = label %||% "Cohort participants")
-        private$base_dt_hash <- digest::digest(dt)
+        private$base_dt_hash <- digest::digest(dt, algo = "spookyhash")
       }
     },
 
@@ -1014,7 +1014,7 @@ CohortPipeline <- R6::R6Class(
 
 # Cache schema version. Bump on any incompatible change to the
 # serialised structure (new fields, renamed fields, etc.).
-.COHORT_CACHE_VERSION <- 2L
+.COHORT_CACHE_VERSION <- 3L
 
 # Local %||%; not exported. (R 4.4 introduced this in base; we keep our
 # own copy for portability with the declared R >= 3.5.0.)

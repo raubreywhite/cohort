@@ -17,13 +17,13 @@ Initial release.
 
 ## Cache integrity
 
-- The cache now stores a `digest::digest()` hash of the base table
-  alongside the operation log. On warm load with a supplied `dt`, the
-  hash is recomputed and compared; a mismatch warns loudly and
-  rebuilds from scratch. Catches silent data updates that would
-  otherwise produce wrong results from stale cached state. Adds
-  `digest` to `Imports`.
-- Cache schema version bumped to 2.
+- The cache now stores a `digest::digest(dt, algo = "spookyhash")`
+  hash of the base table alongside the operation log. On warm load
+  with a supplied `dt`, the hash is recomputed and compared; a
+  mismatch warns loudly and rebuilds from scratch. Catches silent
+  data updates that would otherwise produce wrong results from stale
+  cached state. Adds `digest` to `Imports`.
+- Cache schema version bumped to 3.
 
 ## Incremental caching (new)
 

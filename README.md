@@ -1,4 +1,4 @@
-# cohort
+# cohort <a href="https://www.rwhite.no/cohort/"><img src="man/figures/logo.png" align="right" width="120" /></a>
 
 [![CRAN status](https://www.r-pkg.org/badges/version/cohort)](https://cran.r-project.org/package=cohort)
 

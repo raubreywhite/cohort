@@ -62,6 +62,11 @@
 <li>Re-issuing <code>$new_cohort()</code> with a different label silently updates the field without invalidating the cache.</li>
 </ul></div>
 <div class="section level3">
+<h3 id="cache-integrity-2026-5-10">Cache integrity<a class="anchor" aria-label="anchor" href="#cache-integrity-2026-5-10"></a></h3>
+<ul><li>The cache now stores a <code><a href="https://eddelbuettel.github.io/digest/man/digest.html" class="external-link">digest::digest()</a></code> hash of the base table alongside the operation log. On warm load with a supplied <code>dt</code>, the hash is recomputed and compared; a mismatch warns loudly and rebuilds from scratch. Catches silent data updates that would otherwise produce wrong results from stale cached state. Adds <code>digest</code> to <code>Imports</code>.</li>
+<li>Cache schema version bumped to 2.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="incremental-caching-new-2026-5-10">Incremental caching (new)<a class="anchor" aria-label="anchor" href="#incremental-caching-new-2026-5-10"></a></h3>
 <ul><li>
 <code>CohortPipeline$new()</code> accepts a <code>cache_file =</code> argument. When the file exists, the pipeline is restored from it and operations replay against the cached log; matching operations are no-ops (cache hits), divergent operations recompute only the affected cohort and its descendants. <code>cp$save()</code> writes the current state to the cache file.</li>

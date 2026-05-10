@@ -7,12 +7,12 @@ Initial release.
 - `load()` is no longer a public method; the constructor is the only
   way to install the base data. Use `CohortPipeline$new(dt)` (with
   optional `cache_file`).
-- `CohortPipeline$new()` and `new_cohort()` accept a `label =`
+- `CohortPipeline$new()` and `$new_cohort()` accept a `label =`
   argument: a human-readable display label used by CONSORT diagrams
-  and `list_cohorts()`. Cohort identifiers (`"root"`, `"adults_female"`)
+  and `$list_cohorts()`. Cohort identifiers (`"root"`, `"adults_female"`)
   remain how you reference cohorts in code; labels are presentation
   only.
-- Re-issuing `new_cohort()` with a different label silently updates
+- Re-issuing `$new_cohort()` with a different label silently updates
   the field without invalidating the cache.
 
 ## Incremental caching (new)
@@ -29,7 +29,7 @@ Initial release.
 - New `cp$invalidate(cohort, artifact)` to manually drop a cached
   cohort or artifact when a helper changes that the cache key cannot
   detect.
-- `new_cohort(name, from)` is now idempotent on identical (name,
+- `$new_cohort(name, from)` is now idempotent on identical (name,
   parent) pairs (required for cache replay). It still errors loudly if
   the same name is reissued with a different parent.
 

@@ -1,5 +1,5 @@
 Package: cohort
-Title: Cohort Construction with Provenance
+Title: Build Analytic Cohorts with Full Provenance
 Version: 2026.5.10
 Authors@R: c(
   person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-6747-1726"))
@@ -15,7 +15,6 @@ License: MIT + file LICENSE
 URL: https://www.rwhite.no/cohort/, https://github.com/raubreywhite/cohort
 BugReports: https://github.com/raubreywhite/cohort/issues
 Encoding: UTF-8
-LazyData: true
 Depends: R (>= 3.5.0)
 Imports:
     data.table,

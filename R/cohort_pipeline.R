@@ -79,33 +79,31 @@
 #' serializable and auditable.
 #'
 #' @examples
-#' if (requireNamespace("data.table", quietly = TRUE)) {
-#'   library(data.table)
-#'   d <- data.table(
-#'     id  = 1:10,
-#'     age = c(17, 22, 35, NA, 41, 28, 19, 16, 67, 50),
-#'     sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
-#'   )
+#' library(data.table)
+#' d <- data.table(
+#'   id  = 1:10,
+#'   age = c(17, 22, 35, NA, 41, 28, 19, 16, 67, 50),
+#'   sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
+#' )
 #'
-#'   cp <- CohortPipeline$new(d)
+#' cp <- CohortPipeline$new(d)
 #'
-#'   # Root-level exclusions on the shared base
-#'   cp$exclude_and_track("root", "Missing sex",     "is.na(sex)")
-#'   cp$exclude_and_track("root", "Missing age",     "is.na(age)")
-#'   cp$exclude_and_track("root", "Under 18",        "age < 18")
+#' # Root-level exclusions on the shared base
+#' cp$exclude_and_track("root", "Missing sex",     "is.na(sex)")
+#' cp$exclude_and_track("root", "Missing age",     "is.na(age)")
+#' cp$exclude_and_track("root", "Under 18",        "age < 18")
 #'
-#'   # Branch into an "adults_female" cohort
-#'   cp$new_cohort("adults_female", from = "root")
-#'   cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
+#' # Branch into an "adults_female" cohort
+#' cp$new_cohort("adults_female", from = "root")
+#' cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
 #'
-#'   # Cache a derived artifact on the cohort
-#'   cp$set_artifact("mean_age", from = "adults_female",
-#'     fn = function(dt, sib) mean(dt$age))
+#' # Cache a derived artifact on the cohort
+#' cp$set_artifact("mean_age", from = "adults_female",
+#'   fn = function(dt, sib) mean(dt$age))
 #'
-#'   cp$list_cohorts()
-#'   cp$consort()
-#'   cp$get_artifact("adults_female", "mean_age")
-#' }
+#' cp$list_cohorts()
+#' cp$consort()
+#' cp$get_artifact("adults_female", "mean_age")
 #'
 #' @import data.table
 #' @import R6

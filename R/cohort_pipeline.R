@@ -51,7 +51,8 @@
 #' - `$new_cohort(name, from)` -- branch from an existing cohort.
 #' - `$exclude_and_track(branch, reason, expr_str)` -- apply a string-form
 #'   predicate and log the exclusion.
-#' - `$set_artifact(name, from, fn)` -- cache a derived object on a cohort.
+#' - `$set_artifact(name, from, fn, argset)` -- cache a derived object on a
+#'   cohort. `fn` may be `function(dt, sib)` or `function(dt, sib, argset)`.
 #' - `$get_included(cohort)` -- included rows of a cohort.
 #' - `$get_everyone(cohort)` -- full-cohort view with a reconstructed
 #'   `.cohort_status` column.
@@ -62,6 +63,8 @@
 #'   contracts.
 #' - `$consort()` -- long-form exclusion log across all branches.
 #' - `$draw_consort_panels(panels, file)` -- render CONSORT diagrams.
+#' - `$save(file)`, `$invalidate(cohort, artifact)` -- incremental cache
+#'   persistence and manual cache invalidation.
 #' - `$print()` -- concise text summary of the cohort tree.
 #'
 #' @section Predicate strings:
@@ -116,17 +119,50 @@ CohortPipeline <- R6::R6Class(
     #' @param dt Optional `data.table` to install as the root cohort. If
     #'   `NULL` (the default), the pipeline starts empty and the user
     #'   should call `$load()` before any other method.
+    #' @param cache_file Optional character path. When supplied, an
+    #'   incremental cache is enabled. If the file exists, the pipeline
+    #'   is restored from it and subsequent operations replay the
+    #'   recorded log on cache hits, recomputing only divergent steps.
+    #'   If the file does not exist, fresh state is built and `$save()`
+    #'   writes to this path. Recommended idiom for scripts:
+    #'   `on.exit(cp$save(), add = TRUE)` near the top.
     #' @param auto_validate Logical. When `TRUE`, `$validate()` is invoked
     #'   automatically after every `$new_cohort()` and `$set_artifact()`
     #'   call so schema mismatches stop at the failure site rather than
     #'   accumulating until the next manual `$validate()`. Defaults to
     #'   `FALSE`.
     #' @return A new `CohortPipeline` instance.
-    initialize = function(dt = NULL, auto_validate = FALSE) {
+    initialize = function(dt = NULL, cache_file = NULL,
+                          auto_validate = FALSE) {
       private$schemas <- list()
       private$nodes <- list()
       private$auto_validate <- isTRUE(auto_validate)
-      if (!is.null(dt)) self$load(dt)
+      private$cache_file <- cache_file
+
+      if (!is.null(cache_file) && file.exists(cache_file)) {
+        snap <- readRDS(cache_file)
+        if (!identical(snap$cache_version, .COHORT_CACHE_VERSION)) {
+          stop("CohortPipeline: cache file '", cache_file, "' is version ",
+            snap$cache_version, " but this package expects ",
+            .COHORT_CACHE_VERSION, ". Delete the cache to start fresh.",
+            call. = FALSE)
+        }
+        if (!is.null(dt) && !identical(dim(dt), dim(snap$base_dt))) {
+          warning("CohortPipeline: supplied 'dt' has different dimensions ",
+            "than cached base table; discarding cache.")
+          self$load(dt)
+        } else {
+          private$base_dt <- snap$base_dt
+          private$nodes   <- snap$nodes
+          private$schemas <- snap$schemas
+          for (nm in names(private$nodes)) {
+            private$nodes[[nm]]$replay_cursor <-
+              private$nodes[[nm]]$branched_at_log_len
+          }
+        }
+      } else if (!is.null(dt)) {
+        self$load(dt)
+      }
     },
 
     #' @description
@@ -143,11 +179,13 @@ CohortPipeline <- R6::R6Class(
         root = list(
           parent              = NA_character_,
           status              = integer(n),                      # all 0L (included)
+          branched_at_status  = integer(n),
           log_entries         = list(),
           branched_at_log_len = 0L,
           branched_at_n       = n,
           artifacts           = list(),
-          frozen              = FALSE
+          frozen              = FALSE,
+          replay_cursor       = 0L
         )
       )
       invisible(self)
@@ -267,18 +305,33 @@ CohortPipeline <- R6::R6Class(
       if (!from %in% names(private$nodes)) {
         stop("new_cohort: unknown parent '", from, "'.", call. = FALSE)
       }
+
       if (name %in% names(private$nodes)) {
-        stop("new_cohort: cohort '", name, "' already exists.", call. = FALSE)
+        existing_parent <- private$nodes[[name]]$parent
+        if (identical(existing_parent, from)) {
+          # Cache replay: cohort already exists with matching parent.
+          # Trust the cache invariant -- if it survived earlier cascade
+          # invalidations, its inherited prefix is consistent.
+          private$nodes[[from]]$frozen <- TRUE
+          return(invisible(self))
+        }
+        stop("new_cohort: cohort '", name, "' already exists",
+          if (!is.na(existing_parent)) paste0(" (parent '", existing_parent, "')") else "",
+          ". Call $invalidate('", name, "') to drop it first.",
+          call. = FALSE)
       }
+
       parent_node <- private$nodes[[from]]
       private$nodes[[name]] <- list(
         parent              = from,
         status              = parent_node$status,
+        branched_at_status  = parent_node$status,
         log_entries         = parent_node$log_entries,
         branched_at_log_len = length(parent_node$log_entries),
         branched_at_n       = sum(parent_node$status == 0L),
         artifacts           = list(),
-        frozen              = FALSE
+        frozen              = FALSE,
+        replay_cursor       = length(parent_node$log_entries)
       )
       # Freeze the parent: branching from a cohort means its definition
       # must not change again, otherwise sibling branches would have
@@ -307,13 +360,32 @@ CohortPipeline <- R6::R6Class(
         stop("exclude_and_track: 'expr_str' must be a single character string.",
           call. = FALSE)
       }
-      if (isTRUE(private$nodes[[branch]]$frozen)) {
+      node <- private$nodes[[branch]]
+      cursor <- node$replay_cursor %||% length(node$log_entries)
+
+      # Cache replay: if the cursor still points inside the cohort's log,
+      # the next entry must match exactly or we diverge.
+      if (cursor < length(node$log_entries)) {
+        cached <- node$log_entries[[cursor + 1L]]
+        if (identical(cached$reason, reason) &&
+            identical(cached$expr_str, expr_str)) {
+          private$nodes[[branch]]$replay_cursor <- cursor + 1L
+          return(invisible(self))
+        }
+        private$.invalidate_from(branch, cursor)
+        node <- private$nodes[[branch]]
+      }
+
+      # Past the cached horizon. The freeze rule still protects against
+      # adding a new exclusion to a cohort that has children/artifacts in
+      # this session. Cache replay never reaches here for an unchanged
+      # script, so the strict check stays intact.
+      if (isTRUE(node$frozen)) {
         stop("exclude_and_track: cohort '", branch,
           "' is frozen (already has children or artifacts). ",
           "Apply all exclusions before branching from it or attaching ",
           "artifacts.", call. = FALSE)
       }
-      node <- private$nodes[[branch]]
       step_num <- length(node$log_entries) + 1L
       included_idx <- which(node$status == 0L)
 
@@ -325,6 +397,7 @@ CohortPipeline <- R6::R6Class(
           n_excluded  = 0L,
           n_remaining = 0L
         )
+        node$replay_cursor <- step_num
         private$nodes[[branch]] <- node
         return(invisible(self))
       }
@@ -355,34 +428,84 @@ CohortPipeline <- R6::R6Class(
         n_excluded  = length(exclude_idx),
         n_remaining = n_remaining
       )
+      node$replay_cursor <- step_num
       private$nodes[[branch]] <- node
       invisible(self)
     },
 
     #' @description
-    #' Compute and cache a derived artifact on a cohort. The supplied
-    #' function is called with two arguments: an independent copy of the
-    #' included rows, and the named list of artifacts already attached to
-    #' that cohort.
+    #' Compute and cache a derived artifact on a cohort.
+    #'
+    #' `fn` may have either the legacy 2-argument signature
+    #' `function(dt, sib)` or the 3-argument signature
+    #' `function(dt, sib, argset)`. The 3-argument form pairs with the
+    #' `argset` parameter to make the cache contract explicit: the cache
+    #' key is `(name, from, body(fn), argset)`, so the artifact is
+    #' recomputed only when one of those changes. With the 2-argument
+    #' form, `fn` is invoked normally but `argset` is not used in the
+    #' cache key (suitable for one-off scripts; not recommended when
+    #' relying on `cache_file`).
+    #'
+    #' Note that the cache key uses `body(fn)` literally; if `fn` calls
+    #' a helper that you change, the cache cannot detect that. Either
+    #' include the helper's output / a version tag in `argset`, or call
+    #' `$invalidate()` to force recompute.
     #' @param name Character. Artifact name (must be unique on the cohort).
     #' @param from Character. Cohort to attach the artifact to.
-    #' @param fn Function with signature `function(dt, siblings)`. The
-    #'   return value becomes the artifact.
+    #' @param fn Function with signature `function(dt, sib)` or
+    #'   `function(dt, sib, argset)`. The return value becomes the
+    #'   artifact.
+    #' @param argset Optional named list. Explicit data dependencies of
+    #'   `fn` (e.g. `list(outcomes = cfg$outcomes)`); participates in the
+    #'   cache key. Use the 3-argument `fn` signature to read these out.
     #' @return The pipeline (invisibly).
-    set_artifact = function(name, from, fn) {
+    set_artifact = function(name, from, fn, argset = NULL) {
       if (!is.function(fn)) {
         stop("set_artifact: 'fn' must be a function.", call. = FALSE)
       }
       if (!from %in% names(private$nodes)) {
         stop("set_artifact: unknown cohort '", from, "'.", call. = FALSE)
       }
+      # Compat shim: 2-arg fn keeps the old (dt, sib) signature; 3-arg fn
+      # gets argset passed explicitly and participates in cache matching.
+      n_formals <- length(formals(fn))
+      uses_argset <- n_formals >= 3L
+
       node <- private$nodes[[from]]
-      if (name %in% names(node$artifacts)) {
-        stop("set_artifact: artifact '", name, "' already exists on cohort '",
-          from, "'.", call. = FALSE)
+      cached_meta <- node$artifact_meta[[name]]
+      if (!is.null(cached_meta)) {
+        body_match <- identical(cached_meta$body, body(fn))
+        argset_match <- identical(cached_meta$argset, argset)
+        if (body_match && argset_match) {
+          node$frozen <- TRUE
+          private$nodes[[from]] <- node
+          return(invisible(self))
+        }
+        # Divergent artifact: drop it and any artifacts declared after it
+        # (subsequent ones may chain via `sib`).
+        keep <- character()
+        for (nm in names(node$artifacts)) {
+          if (identical(nm, name)) break
+          keep <- c(keep, nm)
+        }
+        node$artifacts <- node$artifacts[keep]
+        node$artifact_meta <- node$artifact_meta[keep]
+      } else if (name %in% names(node$artifacts)) {
+        # Old-format cache (no meta): treat as miss.
+        node$artifacts[[name]] <- NULL
       }
-      result <- fn(self$get_included(from), node$artifacts)
+
+      result <- if (uses_argset) {
+        fn(self$get_included(from), node$artifacts, argset)
+      } else {
+        fn(self$get_included(from), node$artifacts)
+      }
       node$artifacts[[name]] <- result
+      if (is.null(node$artifact_meta)) node$artifact_meta <- list()
+      node$artifact_meta[[name]] <- list(
+        body   = body(fn),
+        argset = argset
+      )
       # Freeze on first artifact: subsequent exclude_and_track would
       # silently invalidate the cached value.
       node$frozen <- TRUE
@@ -672,6 +795,64 @@ CohortPipeline <- R6::R6Class(
         }
       }
       invisible(self)
+    },
+
+    #' @description
+    #' Persist the pipeline to its `cache_file` (set at construction).
+    #' On the next `CohortPipeline$new(dt, cache_file = ...)` with the same
+    #' file, the saved state is restored and re-issued operations replay
+    #' from the cache; only divergent operations recompute. Idempotent
+    #' beyond the file write.
+    #' @param file Optional override for the cache file path.
+    #' @return The pipeline (invisibly).
+    save = function(file = NULL) {
+      path <- file %||% private$cache_file
+      if (is.null(path)) {
+        stop("save: no cache_file set. Pass one to CohortPipeline$new() or ",
+          "to $save(file = ...) explicitly.", call. = FALSE)
+      }
+      dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+      saveRDS(list(
+        cache_version = .COHORT_CACHE_VERSION,
+        base_dt       = private$base_dt,
+        nodes         = private$nodes,
+        schemas       = private$schemas
+      ), file = path)
+      invisible(self)
+    },
+
+    #' @description
+    #' Manually invalidate a cached cohort (drops the cohort and every
+    #' descendant) or a single artifact. Use when a helper function called
+    #' from inside a `set_artifact` `fn` has changed -- the cache key
+    #' (`body(fn)` + argset) cannot detect that automatically.
+    #' @param cohort Character. Cohort to invalidate.
+    #' @param artifact Optional character. If supplied, only the named
+    #'   artifact (and any artifacts declared after it on the same cohort)
+    #'   is dropped.
+    #' @return The pipeline (invisibly).
+    invalidate = function(cohort, artifact = NULL) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("invalidate: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      if (is.null(artifact)) {
+        private$.drop_subtree(cohort)
+      } else {
+        node <- private$nodes[[cohort]]
+        if (!artifact %in% names(node$artifacts)) {
+          stop("invalidate: cohort '", cohort, "' has no artifact '",
+            artifact, "'.", call. = FALSE)
+        }
+        keep <- character()
+        for (nm in names(node$artifacts)) {
+          if (identical(nm, artifact)) break
+          keep <- c(keep, nm)
+        }
+        node$artifacts <- node$artifacts[keep]
+        node$artifact_meta <- node$artifact_meta[keep]
+        private$nodes[[cohort]] <- node
+      }
+      invisible(self)
     }
   ),
   private = list(
@@ -679,6 +860,7 @@ CohortPipeline <- R6::R6Class(
     nodes          = NULL,
     schemas        = NULL,
     auto_validate  = FALSE,
+    cache_file     = NULL,
 
     # Read-only access to the shared base table for plotting helpers.
     get_base_dt = function() private$base_dt,
@@ -717,9 +899,85 @@ CohortPipeline <- R6::R6Class(
         cur <- if (is.null(parent) || is.na(parent)) NULL else parent
       }
       out
+    },
+
+    # All transitive descendants of a cohort.
+    .descendants = function(name) {
+      result <- character()
+      to_check <- name
+      while (length(to_check) > 0L) {
+        next_check <- character()
+        for (cur in to_check) {
+          kids <- vapply(private$nodes, function(n) {
+            !is.na(n$parent) && identical(n$parent, cur)
+          }, logical(1L))
+          kids <- names(private$nodes)[kids]
+          result <- c(result, kids)
+          next_check <- c(next_check, kids)
+        }
+        to_check <- next_check
+      }
+      result
+    },
+
+    # Drop a cohort and every descendant from the node store.
+    .drop_subtree = function(name) {
+      for (n in c(name, private$.descendants(name))) {
+        private$nodes[[n]] <- NULL
+      }
+    },
+
+    # Truncate `branch`'s own log at `own_cursor`, replay the kept own
+    # entries from the at-branch status, drop artifacts, and cascade
+    # invalidate any descendants that branched after the cutoff.
+    .invalidate_from = function(branch, own_cursor) {
+      node <- private$nodes[[branch]]
+      keep_len <- node$branched_at_log_len + own_cursor
+      if (keep_len < length(node$log_entries)) {
+        node$log_entries <- node$log_entries[seq_len(keep_len)]
+      }
+      # Re-derive status by replaying the kept own entries against the
+      # at-branch status. Inherited entries (positions <= branched_at)
+      # are part of the parent's history and don't need re-execution
+      # here -- the parent applied them already.
+      status <- node$branched_at_status
+      if (own_cursor > 0L) {
+        for (i in seq_len(own_cursor)) {
+          step_idx <- node$branched_at_log_len + i
+          entry    <- node$log_entries[[step_idx]]
+          included_idx <- which(status == 0L)
+          if (length(included_idx) > 0L) {
+            expr <- parse(text = entry$expr_str)[[1L]]
+            mask <- private$base_dt[included_idx, eval(expr)]
+            mask[is.na(mask)] <- FALSE
+            ex <- included_idx[as.logical(mask)]
+            if (length(ex) > 0L) status[ex] <- step_idx
+          }
+        }
+      }
+      node$status        <- status
+      node$artifacts     <- list()
+      node$artifact_meta <- list()
+      node$frozen        <- FALSE
+      node$replay_cursor <- own_cursor
+      private$nodes[[branch]] <- node
+
+      # Cascade: descendants that branched after the cutoff inherited the
+      # now-stale entries. Drop them; the user's script will recreate
+      # them on subsequent calls (which will fall through to fresh
+      # construction since the names will no longer exist).
+      for (d in private$.descendants(branch)) {
+        if (private$nodes[[d]]$branched_at_log_len > keep_len) {
+          private$nodes[[d]] <- NULL
+        }
+      }
     }
   )
 )
+
+# Cache schema version. Bump on any incompatible change to the
+# serialised structure (new fields, renamed fields, etc.).
+.COHORT_CACHE_VERSION <- 1L
 
 # Local %||%; not exported. (R 4.4 introduced this in base; we keep our
 # own copy for portability with the declared R >= 3.5.0.)

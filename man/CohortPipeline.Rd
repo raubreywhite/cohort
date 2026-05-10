@@ -65,7 +65,8 @@ vector.
 \item \verb{$new_cohort(name, from)} -- branch from an existing cohort.
 \item \verb{$exclude_and_track(branch, reason, expr_str)} -- apply a string-form
 predicate and log the exclusion.
-\item \verb{$set_artifact(name, from, fn)} -- cache a derived object on a cohort.
+\item \verb{$set_artifact(name, from, fn, argset)} -- cache a derived object on a
+cohort. \code{fn} may be \verb{function(dt, sib)} or \verb{function(dt, sib, argset)}.
 \item \verb{$get_included(cohort)} -- included rows of a cohort.
 \item \verb{$get_everyone(cohort)} -- full-cohort view with a reconstructed
 \code{.cohort_status} column.
@@ -76,6 +77,8 @@ predicate and log the exclusion.
 contracts.
 \item \verb{$consort()} -- long-form exclusion log across all branches.
 \item \verb{$draw_consort_panels(panels, file)} -- render CONSORT diagrams.
+\item \verb{$save(file)}, \verb{$invalidate(cohort, artifact)} -- incremental cache
+persistence and manual cache invalidation.
 \item \verb{$print()} -- concise text summary of the cohort tree.
 }
 }
@@ -124,96 +127,108 @@ if (requireNamespace("data.table", quietly = TRUE)) {
 }
 \section{Methods}{
 \subsection{Public methods}{
-\itemize{
-\item \href{#method-CohortPipeline-new}{\code{CohortPipeline$new()}}
-\item \href{#method-CohortPipeline-load}{\code{CohortPipeline$load()}}
-\item \href{#method-CohortPipeline-declare_schema}{\code{CohortPipeline$declare_schema()}}
-\item \href{#method-CohortPipeline-validate}{\code{CohortPipeline$validate()}}
-\item \href{#method-CohortPipeline-list_schemas}{\code{CohortPipeline$list_schemas()}}
-\item \href{#method-CohortPipeline-get_schemas}{\code{CohortPipeline$get_schemas()}}
-\item \href{#method-CohortPipeline-new_cohort}{\code{CohortPipeline$new_cohort()}}
-\item \href{#method-CohortPipeline-exclude_and_track}{\code{CohortPipeline$exclude_and_track()}}
-\item \href{#method-CohortPipeline-set_artifact}{\code{CohortPipeline$set_artifact()}}
-\item \href{#method-CohortPipeline-get_included}{\code{CohortPipeline$get_included()}}
-\item \href{#method-CohortPipeline-get_everyone}{\code{CohortPipeline$get_everyone()}}
-\item \href{#method-CohortPipeline-get_artifact}{\code{CohortPipeline$get_artifact()}}
-\item \href{#method-CohortPipeline-n_included}{\code{CohortPipeline$n_included()}}
-\item \href{#method-CohortPipeline-n_total}{\code{CohortPipeline$n_total()}}
-\item \href{#method-CohortPipeline-list_cohorts}{\code{CohortPipeline$list_cohorts()}}
-\item \href{#method-CohortPipeline-list_artifacts}{\code{CohortPipeline$list_artifacts()}}
-\item \href{#method-CohortPipeline-consort}{\code{CohortPipeline$consort()}}
-\item \href{#method-CohortPipeline-draw_consort_panels}{\code{CohortPipeline$draw_consort_panels()}}
-\item \href{#method-CohortPipeline-plot}{\code{CohortPipeline$plot()}}
-\item \href{#method-CohortPipeline-print}{\code{CohortPipeline$print()}}
-}
+  \itemize{
+    \item \href{#method-CohortPipeline-initialize}{\code{CohortPipeline$new()}}
+    \item \href{#method-CohortPipeline-load}{\code{CohortPipeline$load()}}
+    \item \href{#method-CohortPipeline-declare_schema}{\code{CohortPipeline$declare_schema()}}
+    \item \href{#method-CohortPipeline-validate}{\code{CohortPipeline$validate()}}
+    \item \href{#method-CohortPipeline-list_schemas}{\code{CohortPipeline$list_schemas()}}
+    \item \href{#method-CohortPipeline-get_schemas}{\code{CohortPipeline$get_schemas()}}
+    \item \href{#method-CohortPipeline-new_cohort}{\code{CohortPipeline$new_cohort()}}
+    \item \href{#method-CohortPipeline-exclude_and_track}{\code{CohortPipeline$exclude_and_track()}}
+    \item \href{#method-CohortPipeline-set_artifact}{\code{CohortPipeline$set_artifact()}}
+    \item \href{#method-CohortPipeline-get_included}{\code{CohortPipeline$get_included()}}
+    \item \href{#method-CohortPipeline-get_everyone}{\code{CohortPipeline$get_everyone()}}
+    \item \href{#method-CohortPipeline-get_artifact}{\code{CohortPipeline$get_artifact()}}
+    \item \href{#method-CohortPipeline-n_included}{\code{CohortPipeline$n_included()}}
+    \item \href{#method-CohortPipeline-n_total}{\code{CohortPipeline$n_total()}}
+    \item \href{#method-CohortPipeline-list_cohorts}{\code{CohortPipeline$list_cohorts()}}
+    \item \href{#method-CohortPipeline-list_artifacts}{\code{CohortPipeline$list_artifacts()}}
+    \item \href{#method-CohortPipeline-consort}{\code{CohortPipeline$consort()}}
+    \item \href{#method-CohortPipeline-draw_consort_panels}{\code{CohortPipeline$draw_consort_panels()}}
+    \item \href{#method-CohortPipeline-plot}{\code{CohortPipeline$plot()}}
+    \item \href{#method-CohortPipeline-print}{\code{CohortPipeline$print()}}
+    \item \href{#method-CohortPipeline-save}{\code{CohortPipeline$save()}}
+    \item \href{#method-CohortPipeline-invalidate}{\code{CohortPipeline$invalidate()}}
+  }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-new"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-new}{}}}
-\subsection{Method \code{new()}}{
-Create a new (empty or seeded) \code{CohortPipeline}.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$new(dt = NULL, auto_validate = FALSE)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{dt}}{Optional \code{data.table} to install as the root cohort. If
+\if{html}{\out{<a id="method-CohortPipeline-initialize"></a>}}
+\if{latex}{\out{\hypertarget{method-CohortPipeline-initialize}{}}}
+\subsection{\code{CohortPipeline$new()}}{
+  Create a new (empty or seeded) \code{CohortPipeline}.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$new(dt = NULL, cache_file = NULL, auto_validate = FALSE)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{dt}}{Optional \code{data.table} to install as the root cohort. If
 \code{NULL} (the default), the pipeline starts empty and the user
 should call \verb{$load()} before any other method.}
-
-\item{\code{auto_validate}}{Logical. When \code{TRUE}, \verb{$validate()} is invoked
+      \item{\code{cache_file}}{Optional character path. When supplied, an
+incremental cache is enabled. If the file exists, the pipeline
+is restored from it and subsequent operations replay the
+recorded log on cache hits, recomputing only divergent steps.
+If the file does not exist, fresh state is built and \verb{$save()}
+writes to this path. Recommended idiom for scripts:
+\code{on.exit(cp$save(), add = TRUE)} near the top.}
+      \item{\code{auto_validate}}{Logical. When \code{TRUE}, \verb{$validate()} is invoked
 automatically after every \verb{$new_cohort()} and \verb{$set_artifact()}
 call so schema mismatches stop at the failure site rather than
 accumulating until the next manual \verb{$validate()}. Defaults to
 \code{FALSE}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A new \code{CohortPipeline} instance.
+  }
 }
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A new \code{CohortPipeline} instance.
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-load"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-load}{}}}
-\subsection{Method \code{load()}}{
-Install a \code{data.table} as the shared base table and create a root
+\subsection{\code{CohortPipeline$load()}}{
+  Install a \code{data.table} as the shared base table and create a root
 cohort named \code{"root"}. The user's table is copied once; subsequent
 modifications to the user's \code{dt} do not affect the pipeline.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$load(dt)}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$load(dt)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{dt}}{A \code{data.table} containing one row per subject.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly), for chaining.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{dt}}{A \code{data.table} containing one row per subject.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The pipeline (invisibly), for chaining.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-declare_schema"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-declare_schema}{}}}
-\subsection{Method \code{declare_schema()}}{
-Declare a column-type / level / NA contract for a branch. Validation
+\subsection{\code{CohortPipeline$declare_schema()}}{
+  Declare a column-type / level / NA contract for a branch. Validation
 runs only when \verb{$validate()} is called (or automatically when the
 pipeline was constructed with \code{auto_validate = TRUE}).
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$declare_schema(branch, schema = NULL, from = NULL)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{branch}}{Character. Branch name to attach the schema to.}
-
-\item{\code{schema}}{Named list. Each element describes one column with
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$declare_schema(branch, schema = NULL, from = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{branch}}{Character. Branch name to attach the schema to.}
+      \item{\code{schema}}{Named list. Each element describes one column with
 fields:
 \itemize{
 \item \code{type}: one of \code{"integer"}, \code{"numeric"}, \code{"factor"}, \code{"logical"},
@@ -221,295 +236,333 @@ fields:
 \item \code{levels} (factor only): expected \code{levels()} vector.
 \item \code{na}: if \code{FALSE}, the column must contain no \code{NA}s.
 }}
-
-\item{\code{from}}{Optional character. If supplied, the new schema starts
+      \item{\code{from}}{Optional character. If supplied, the new schema starts
 as a copy of the schema attached to \code{from} and the entries in
 \code{schema} are merged on top.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The pipeline (invisibly).
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-validate"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-validate}{}}}
-\subsection{Method \code{validate()}}{
-Validate every declared schema against the included rows of its
+\subsection{\code{CohortPipeline$validate()}}{
+  Validate every declared schema against the included rows of its
 branch. Throws an error listing every mismatch found.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$validate()}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$validate()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly), if validation passes.
+  }
 }
 
-\subsection{Returns}{
-The pipeline (invisibly), if validation passes.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-list_schemas"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-list_schemas}{}}}
-\subsection{Method \code{list_schemas()}}{
-Tabulate the names and column counts of all declared schemas.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$list_schemas()}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$list_schemas()}}{
+  Tabulate the names and column counts of all declared schemas.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$list_schemas()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A \code{data.table} with columns \code{branch} and \code{n_cols}.
+  }
 }
 
-\subsection{Returns}{
-A \code{data.table} with columns \code{branch} and \code{n_cols}.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-get_schemas"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_schemas}{}}}
-\subsection{Method \code{get_schemas()}}{
-Return the raw schema list for inspection.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_schemas()}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$get_schemas()}}{
+  Return the raw schema list for inspection.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$get_schemas()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A named list of schemas.
+  }
 }
 
-\subsection{Returns}{
-A named list of schemas.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-new_cohort"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-new_cohort}{}}}
-\subsection{Method \code{new_cohort()}}{
-Create a new cohort branched from an existing cohort. The new
+\subsection{\code{CohortPipeline$new_cohort()}}{
+  Create a new cohort branched from an existing cohort. The new
 cohort starts identical to its parent at the moment of branching;
 subsequent exclusions in the parent do not propagate to the child.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$new_cohort(name, from)}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$new_cohort(name, from)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{name}}{Character. Name of the new cohort.}
+      \item{\code{from}}{Character. Name of the parent cohort.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{Character. Name of the new cohort.}
-
-\item{\code{from}}{Character. Name of the parent cohort.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The pipeline (invisibly).
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-exclude_and_track"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-exclude_and_track}{}}}
-\subsection{Method \code{exclude_and_track()}}{
-Apply an exclusion predicate to a cohort and record the result on
+\subsection{\code{CohortPipeline$exclude_and_track()}}{
+  Apply an exclusion predicate to a cohort and record the result on
 the exclusion log. The predicate is evaluated against the included
 subset of the base table; rows for which the predicate evaluates
 to \code{TRUE} are excluded with the supplied reason. \code{NA} predicate
 results are treated as \code{FALSE}.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$exclude_and_track(branch, reason, expr_str)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{branch}}{Character. Cohort to apply the exclusion to.}
-
-\item{\code{reason}}{Character. Human-readable reason recorded on the log.}
-
-\item{\code{expr_str}}{Character. R expression as a string (parsed with
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$exclude_and_track(branch, reason, expr_str)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{branch}}{Character. Cohort to apply the exclusion to.}
+      \item{\code{reason}}{Character. Human-readable reason recorded on the log.}
+      \item{\code{expr_str}}{Character. R expression as a string (parsed with
 \code{parse(text = ...)}). For example \code{"is.na(age) | age < 18"}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The pipeline (invisibly).
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-set_artifact"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-set_artifact}{}}}
-\subsection{Method \code{set_artifact()}}{
-Compute and cache a derived artifact on a cohort. The supplied
-function is called with two arguments: an independent copy of the
-included rows, and the named list of artifacts already attached to
-that cohort.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$set_artifact(name, from, fn)}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$set_artifact()}}{
+  Compute and cache a derived artifact on a cohort.
+
+\code{fn} may have either the legacy 2-argument signature
+\verb{function(dt, sib)} or the 3-argument signature
+\verb{function(dt, sib, argset)}. The 3-argument form pairs with the
+\code{argset} parameter to make the cache contract explicit: the cache
+key is \verb{(name, from, body(fn), argset)}, so the artifact is
+recomputed only when one of those changes. With the 2-argument
+form, \code{fn} is invoked normally but \code{argset} is not used in the
+cache key (suitable for one-off scripts; not recommended when
+relying on \code{cache_file}).
+
+Note that the cache key uses \code{body(fn)} literally; if \code{fn} calls
+a helper that you change, the cache cannot detect that. Either
+include the helper's output / a version tag in \code{argset}, or call
+\verb{$invalidate()} to force recompute.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$set_artifact(name, from, fn, argset = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{name}}{Character. Artifact name (must be unique on the cohort).}
+      \item{\code{from}}{Character. Cohort to attach the artifact to.}
+      \item{\code{fn}}{Function with signature \verb{function(dt, sib)} or
+\verb{function(dt, sib, argset)}. The return value becomes the
+artifact.}
+      \item{\code{argset}}{Optional named list. Explicit data dependencies of
+\code{fn} (e.g. \code{list(outcomes = cfg$outcomes)}); participates in the
+cache key. Use the 3-argument \code{fn} signature to read these out.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{name}}{Character. Artifact name (must be unique on the cohort).}
-
-\item{\code{from}}{Character. Cohort to attach the artifact to.}
-
-\item{\code{fn}}{Function with signature \verb{function(dt, siblings)}. The
-return value becomes the artifact.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The pipeline (invisibly).
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-get_included"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_included}{}}}
-\subsection{Method \code{get_included()}}{
-Return an independent copy of the included rows of a cohort. The
+\subsection{\code{CohortPipeline$get_included()}}{
+  Return an independent copy of the included rows of a cohort. The
 returned \code{data.table} may be mutated freely without affecting the
 shared base table or any other cohort.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_included(cohort)}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$get_included(cohort)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort name.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A \code{data.table}.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohort}}{Character. Cohort name.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A \code{data.table}.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-get_everyone"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_everyone}{}}}
-\subsection{Method \code{get_everyone()}}{
-Return a copy of the full base table with a \code{.cohort_status} column
+\subsection{\code{CohortPipeline$get_everyone()}}{
+  Return a copy of the full base table with a \code{.cohort_status} column
 reconstructed from this branch's exclusion history. Included rows
 are labeled \code{"included"}; excluded rows carry the reason of the
 first exclusion that caught them.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_everyone(cohort)}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$get_everyone(cohort)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort name.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A \code{data.table} of the same height as the base table, with
+one extra column \code{.cohort_status}.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohort}}{Character. Cohort name.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A \code{data.table} of the same height as the base table, with
-one extra column \code{.cohort_status}.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-get_artifact"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_artifact}{}}}
-\subsection{Method \code{get_artifact()}}{
-Retrieve a cached artifact from a cohort.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$get_artifact(cohort, name)}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$get_artifact()}}{
+  Retrieve a cached artifact from a cohort.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$get_artifact(cohort, name)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort name.}
+      \item{\code{name}}{Character. Artifact name.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The cached artifact (any type).
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohort}}{Character. Cohort name.}
-
-\item{\code{name}}{Character. Artifact name.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-The cached artifact (any type).
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-n_included"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-n_included}{}}}
-\subsection{Method \code{n_included()}}{
-Number of included rows in a cohort.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$n_included(cohort)}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$n_included()}}{
+  Number of included rows in a cohort.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$n_included(cohort)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort name.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    Integer.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohort}}{Character. Cohort name.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-Integer.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-n_total"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-n_total}{}}}
-\subsection{Method \code{n_total()}}{
-Total number of rows in the shared base table.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$n_total()}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$n_total()}}{
+  Total number of rows in the shared base table.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$n_total()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    Integer.
+  }
 }
 
-\subsection{Returns}{
-Integer.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-list_cohorts"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-list_cohorts}{}}}
-\subsection{Method \code{list_cohorts()}}{
-Tabulate every cohort with its parent, sizes and number of own
+\subsection{\code{CohortPipeline$list_cohorts()}}{
+  Tabulate every cohort with its parent, sizes and number of own
 exclusion steps and artifacts.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$list_cohorts()}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$list_cohorts()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A \code{data.table} with one row per cohort.
+  }
 }
 
-\subsection{Returns}{
-A \code{data.table} with one row per cohort.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-list_artifacts"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-list_artifacts}{}}}
-\subsection{Method \code{list_artifacts()}}{
-Names of cached artifacts attached to a cohort.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$list_artifacts(cohort)}\if{html}{\out{</div>}}
+\subsection{\code{CohortPipeline$list_artifacts()}}{
+  Names of cached artifacts attached to a cohort.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$list_artifacts(cohort)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort name.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    Character vector.
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohort}}{Character. Cohort name.}
-}
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-Character vector.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-consort"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-consort}{}}}
-\subsection{Method \code{consort()}}{
-Long-form table of exclusion log entries across all cohorts.
+\subsection{\code{CohortPipeline$consort()}}{
+  Long-form table of exclusion log entries across all cohorts.
 Each cohort contributes only its own exclusion steps (steps
 inherited from the parent at branch time are reported under the
 parent, not duplicated).
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$consort()}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$consort()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A \code{data.table} with columns \code{branch}, \code{parent}, \code{step},
+\code{reason}, \code{expr_str}, \code{n_excluded}, \code{n_remaining}.
+  }
 }
 
-\subsection{Returns}{
-A \code{data.table} with columns \code{branch}, \code{parent}, \code{step},
-\code{reason}, \code{expr_str}, \code{n_excluded}, \code{n_remaining}.
-}
-}
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-draw_consort_panels"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-draw_consort_panels}{}}}
-\subsection{Method \code{draw_consort_panels()}}{
-Render one or more CONSORT panels for cohort flows. Each panel
+\subsection{\code{CohortPipeline$draw_consort_panels()}}{
+  Render one or more CONSORT panels for cohort flows. Each panel
 walks a sequence of cohort names, lumping the named cohorts'
 exclusion steps into bullet blocks.
 
@@ -517,8 +570,9 @@ Most users want \verb{$plot()} instead, which auto-discovers every
 root-to-leaf path in the tree and lays them out automatically.
 \verb{$draw_consort_panels()} is the manual escape hatch for custom
 layouts and labels.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$draw_consort_panels(
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$draw_consort_panels(
   panels,
   file = NULL,
   ncol = NULL,
@@ -526,41 +580,37 @@ layouts and labels.
   height = NULL,
   text_width = 40,
   title_fontsize = 14
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{panels}}{A named list. Each element is either a character
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{panels}}{A named list. Each element is either a character
 vector of cohort names (interpreted as the panel's main flow)
 or a list with components \code{flow} (character) and optional
 \code{side_branches} (named character of identity-only branches that
 merge into the spine).}
-
-\item{\code{file}}{Optional character path. If supplied, the rendered
+      \item{\code{file}}{Optional character path. If supplied, the rendered
 plot is written to a \code{.pdf} or \code{.png} file. Otherwise the
 plot is drawn on the active device.}
-
-\item{\code{ncol}}{Optional integer. Number of panels per row.}
-
-\item{\code{width, height}}{Optional numeric (inches). File dimensions.}
-
-\item{\code{text_width}}{Integer. Wrap width for box text.}
-
-\item{\code{title_fontsize}}{Numeric. Title fontsize for each panel.}
+      \item{\code{ncol}}{Optional integer. Number of panels per row.}
+      \item{\code{width, height}}{Optional numeric (inches). File dimensions.}
+      \item{\code{text_width}}{Integer. Wrap width for box text.}
+      \item{\code{title_fontsize}}{Numeric. Title fontsize for each panel.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A list of grobs (invisibly).
+  }
 }
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A list of grobs (invisibly).
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-plot"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-plot}{}}}
-\subsection{Method \code{plot()}}{
-Plot a CONSORT diagram of the cohort tree.
+\subsection{\code{CohortPipeline$plot()}}{
+  Plot a CONSORT diagram of the cohort tree.
 
 With no arguments, plots one panel per cohort. Each panel walks
 the root-to-cohort path automatically and uses cohort names as
@@ -568,8 +618,9 @@ box labels. With one or more cohort names, plots only those.
 
 This is the default convenience entry point. Use
 \verb{$draw_consort_panels()} for custom labels or layouts.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$plot(
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$plot(
   cohorts = NULL,
   file = NULL,
   ncol = NULL,
@@ -577,46 +628,101 @@ This is the default convenience entry point. Use
   height = NULL,
   text_width = 40,
   title_fontsize = 14
-)}\if{html}{\out{</div>}}
-}
-
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{cohorts}}{Optional character vector of cohort names. If
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohorts}}{Optional character vector of cohort names. If
 omitted, every cohort is plotted.}
-
-\item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If supplied, the plot is
+      \item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If supplied, the plot is
 written to that file. Otherwise it is drawn on the active device.}
-
-\item{\code{ncol, width, height, text_width, title_fontsize}}{Optional layout
+      \item{\code{ncol, width, height, text_width, title_fontsize}}{Optional layout
 overrides; see \verb{$draw_consort_panels()}.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    A list of grobs (invisibly).
+  }
 }
-\if{html}{\out{</div>}}
-}
-\subsection{Returns}{
-A list of grobs (invisibly).
-}
-}
+
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-CohortPipeline-print"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-print}{}}}
-\subsection{Method \code{print()}}{
-Concise text summary of the cohort tree, exclusion counts, and
+\subsection{\code{CohortPipeline$print()}}{
+  Concise text summary of the cohort tree, exclusion counts, and
 attached artifacts.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{CohortPipeline$print(...)}\if{html}{\out{</div>}}
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$print(...)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{...}}{Unused.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{...}}{Unused.}
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-CohortPipeline-save"></a>}}
+\if{latex}{\out{\hypertarget{method-CohortPipeline-save}{}}}
+\subsection{\code{CohortPipeline$save()}}{
+  Persist the pipeline to its \code{cache_file} (set at construction).
+On the next \code{CohortPipeline$new(dt, cache_file = ...)} with the same
+file, the saved state is restored and re-issued operations replay
+from the cache; only divergent operations recompute. Idempotent
+beyond the file write.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$save(file = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{file}}{Optional override for the cache file path.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
-\if{html}{\out{</div>}}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-CohortPipeline-invalidate"></a>}}
+\if{latex}{\out{\hypertarget{method-CohortPipeline-invalidate}{}}}
+\subsection{\code{CohortPipeline$invalidate()}}{
+  Manually invalidate a cached cohort (drops the cohort and every
+descendant) or a single artifact. Use when a helper function called
+from inside a \code{set_artifact} \code{fn} has changed -- the cache key
+(\code{body(fn)} + argset) cannot detect that automatically.
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{CohortPipeline$invalidate(cohort, artifact = NULL)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{cohort}}{Character. Cohort to invalidate.}
+      \item{\code{artifact}}{Optional character. If supplied, only the named
+artifact (and any artifacts declared after it on the same cohort)
+is dropped.}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The pipeline (invisibly).
+  }
 }
-\subsection{Returns}{
-The pipeline (invisibly).
-}
-}
+
 }

@@ -197,6 +197,47 @@ cp$plot(file = "Figure_1_CONSORT.pdf")
 For full control over labels, panel titles, side branches and layout,
 use `$draw_consort_panels()` (see `?CohortPipeline`).
 
+## Incremental caching
+
+For long-running scripts, supply a `cache_file` to `CohortPipeline$new()`
+to enable incremental re-execution. On the first run, a snapshot of the
+pipeline is written to disk; on subsequent runs, the snapshot is loaded
+and each operation in the script is replayed against it. Operations
+matching the cached log are no-ops (cursor advances, no work);
+divergent operations truncate the log and recompute only the affected
+cohort and its descendants.
+
+```r
+cp <- CohortPipeline$new(d, cache_file = "cache/cp.rds")
+on.exit(cp$save(), add = TRUE)
+
+cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+cp$exclude_and_track("root", "Under 18",    "age < 18")
+cp$new_cohort("adults_female", from = "root")
+cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
+```
+
+Cache hits compare:
+
+| Method                | Cache key                          |
+|-----------------------|------------------------------------|
+| `exclude_and_track`   | `(branch, reason, expr_str)`       |
+| `new_cohort`          | `(name, from)`                     |
+| `declare_schema`      | overwrites; not cached             |
+| `set_artifact`        | `(name, from, body(fn), argset)`   |
+
+For `set_artifact`, the 3-argument form `function(dt, sib, argset)` is
+recommended when caching: the `argset` list carries the data
+dependencies explicitly and participates in the cache key, so changing
+e.g. `argset = list(washout = 84L)` to `washout = 90L` triggers a
+recompute. The 2-argument form `function(dt, sib)` still works but
+won't catch closure-captured changes.
+
+The cache key uses `body(fn)` literally; if `fn` calls a helper that
+you change, the cache cannot detect that. Either include a version tag
+in `argset`, or call `cp$invalidate(cohort)` to drop the cohort and
+force recompute.
+
 ## Mutation contract (summary)
 
 | Method                       | Returns                    | Mutation safe? |

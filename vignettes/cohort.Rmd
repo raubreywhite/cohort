@@ -40,13 +40,24 @@ d <- data.table(
 ### Step 1: install a base table
 
 ```{r}
-cp <- CohortPipeline$new()
-cp$load(d)
+cp <- CohortPipeline$new(
+  d,
+  cache_file = file.path(tempdir(), "cohort_cache.rds"),
+  label      = "Eligible patients"
+)
+on.exit(cp$save(), add = TRUE)
 ```
 
 `CohortPipeline$new()` makes a defensive copy of `d` once. The user's
 data table is never mutated, no matter what subsequent operations you
 run on the pipeline.
+
+The `cache_file` argument enables incremental re-execution: on the
+first run a snapshot is written to disk; on subsequent runs the
+snapshot is restored and matching operations replay instantly without
+recomputation. The `label` argument is the cohort's display label in
+CONSORT diagrams (defaults to `"Cohort participants"`); the
+identifier `"root"` is universal and always used in code.
 
 ### Step 2: apply root-level exclusions
 
@@ -67,12 +78,18 @@ column.
 ### Step 3: branch into sub-cohorts
 
 ```{r}
-cp$new_cohort("adults_female", from = "root")
+cp$new_cohort("adults_female", from = "root", label = "Adult females")
 cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
 
-cp$new_cohort("adults_grp_a", from = "root")
+cp$new_cohort("adults_grp_a", from = "root",
+              label = "Adults, group A")
 cp$exclude_and_track("adults_grp_a", "Group not a", "grp != 'a'")
 ```
+
+Identifiers (`"adults_female"`, `"adults_grp_a"`) are what your code
+references; labels are what shows up in figures. Re-issuing
+`new_cohort()` with a different label silently updates the label
+without invalidating the cache.
 
 A branch starts identical to its parent at the moment of branching.
 Sibling branches evolve independently.
@@ -197,27 +214,11 @@ cp$plot(file = "Figure_1_CONSORT.pdf")
 For full control over labels, panel titles, side branches and layout,
 use `$draw_consort_panels()` (see `?CohortPipeline`).
 
-## Incremental caching
+## How the cache decides what to recompute
 
-For long-running scripts, supply a `cache_file` to `CohortPipeline$new()`
-to enable incremental re-execution. On the first run, a snapshot of the
-pipeline is written to disk; on subsequent runs, the snapshot is loaded
-and each operation in the script is replayed against it. Operations
-matching the cached log are no-ops (cursor advances, no work);
-divergent operations truncate the log and recompute only the affected
-cohort and its descendants.
-
-```r
-cp <- CohortPipeline$new(d, cache_file = "cache/cp.rds")
-on.exit(cp$save(), add = TRUE)
-
-cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-cp$exclude_and_track("root", "Under 18",    "age < 18")
-cp$new_cohort("adults_female", from = "root")
-cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
-```
-
-Cache hits compare:
+The worked example above already uses `cache_file` and `on.exit(cp$save())`.
+On the second run of the same script, every operation is checked
+against the cached log:
 
 | Method                | Cache key                          |
 |-----------------------|------------------------------------|
@@ -226,12 +227,20 @@ Cache hits compare:
 | `declare_schema`      | overwrites; not cached             |
 | `set_artifact`        | `(name, from, body(fn), argset)`   |
 
-For `set_artifact`, the 3-argument form `function(dt, sib, argset)` is
-recommended when caching: the `argset` list carries the data
-dependencies explicitly and participates in the cache key, so changing
-e.g. `argset = list(washout = 84L)` to `washout = 90L` triggers a
-recompute. The 2-argument form `function(dt, sib)` still works but
-won't catch closure-captured changes.
+A match advances the replay cursor with no work done. A mismatch
+truncates the log at that point, drops downstream artifacts, cascades
+to descendant cohorts whose inherited prefix is now stale, and
+recomputes only what changed. Labels are presentation, not part of
+the cache key, so re-issuing `new_cohort("adults_female", from =
+"root", label = "Adult women")` updates the label without
+invalidating anything.
+
+For `set_artifact`, prefer the 3-argument signature
+`function(dt, sib, argset)`: data dependencies in `argset` participate
+in the cache key, so changing `argset = list(washout = 84L)` to
+`washout = 90L` triggers a recompute. The 2-argument form
+`function(dt, sib)` still works but won't catch closure-captured
+changes.
 
 The cache key uses `body(fn)` literally; if `fn` calls a helper that
 you change, the cache cannot detect that. Either include a version tag

@@ -35,8 +35,8 @@
 #' you can branch a frozen cohort as many times as you like.
 #'
 #' @section Mutation contract:
-#' - `$load(dt)` makes a defensive copy of `dt` once. The user's data table
-#'   is never modified.
+#' - `CohortPipeline$new(dt)` makes a defensive copy of `dt` once. The
+#'   user's data table is never modified.
 #' - `$get_included(cohort)` returns an independent copy. The caller may
 #'   mutate it freely without affecting any other cohort or the shared
 #'   base table.
@@ -47,8 +47,10 @@
 #'   vector.
 #'
 #' @section Public API:
-#' - `$load(dt)` -- install the shared base table as the root cohort.
-#' - `$new_cohort(name, from)` -- branch from an existing cohort.
+#' - `CohortPipeline$new(dt, cache_file, label)` -- construct a pipeline
+#'   with a shared base table installed as the root cohort. With
+#'   `cache_file`, restore from a prior run if the file exists.
+#' - `$new_cohort(name, from, label)` -- branch from an existing cohort.
 #' - `$exclude_and_track(branch, reason, expr_str)` -- apply a string-form
 #'   predicate and log the exclusion.
 #' - `$set_artifact(name, from, fn, argset)` -- cache a derived object on a
@@ -85,8 +87,7 @@
 #'     sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
 #'   )
 #'
-#'   cp <- CohortPipeline$new()
-#'   cp$load(d)
+#'   cp <- CohortPipeline$new(d)
 #'
 #'   # Root-level exclusions on the shared base
 #'   cp$exclude_and_track("root", "Missing sex",     "is.na(sex)")
@@ -115,10 +116,17 @@ CohortPipeline <- R6::R6Class(
   public = list(
 
     #' @description
-    #' Create a new (empty or seeded) `CohortPipeline`.
-    #' @param dt Optional `data.table` to install as the root cohort. If
-    #'   `NULL` (the default), the pipeline starts empty and the user
-    #'   should call `$load()` before any other method.
+    #' Create a new `CohortPipeline`. If `cache_file` is set and the file
+    #' exists, the pipeline is restored from that snapshot and `dt` is
+    #' used only as a sanity check (its dimensions and column names must
+    #' match the cached base table). Otherwise `dt` is installed as the
+    #' root cohort.
+    #' @param dt A `data.table` to install as the root cohort. Required
+    #'   on cold construction; optional on warm cache load.
+    #' @param label Optional character. Display label for the root cohort
+    #'   (used in CONSORT diagrams and `list_cohorts()`). Defaults to
+    #'   `"Cohort participants"`. Refreshed silently on warm cache load
+    #'   so changing the label between runs is allowed.
     #' @param cache_file Optional character path. When supplied, an
     #'   incremental cache is enabled. If the file exists, the pipeline
     #'   is restored from it and subsequent operations replay the
@@ -133,7 +141,7 @@ CohortPipeline <- R6::R6Class(
     #'   `FALSE`.
     #' @return A new `CohortPipeline` instance.
     initialize = function(dt = NULL, cache_file = NULL,
-                          auto_validate = FALSE) {
+                          label = NULL, auto_validate = FALSE) {
       private$schemas <- list()
       private$nodes <- list()
       private$auto_validate <- isTRUE(auto_validate)
@@ -159,7 +167,7 @@ CohortPipeline <- R6::R6Class(
           warning("CohortPipeline: supplied 'dt' has different ",
             "dimensions or column names than the cached base table; ",
             "discarding cache.")
-          self$load(dt)
+          private$install_base(dt, label = label %||% "Cohort participants")
         } else {
           private$base_dt <- snap$base_dt
           private$nodes   <- snap$nodes
@@ -168,36 +176,15 @@ CohortPipeline <- R6::R6Class(
             private$nodes[[nm]]$replay_cursor <-
               private$nodes[[nm]]$branched_at_log_len
           }
+          # Refresh root label if the user explicitly passed one.
+          # Labels are presentation, not part of the cohort identity.
+          if (!is.null(label) && "root" %in% names(private$nodes)) {
+            private$nodes$root$label <- label
+          }
         }
       } else if (!is.null(dt)) {
-        self$load(dt)
+        private$install_base(dt, label = label %||% "Cohort participants")
       }
-    },
-
-    #' @description
-    #' Install a `data.table` as the shared base table and create a root
-    #' cohort named `"root"`. The user's table is copied once; subsequent
-    #' modifications to the user's `dt` do not affect the pipeline.
-    #' @param dt A `data.table` containing one row per subject.
-    #' @return The pipeline (invisibly), for chaining.
-    load = function(dt) {
-      stopifnot(is.data.table(dt))
-      private$base_dt <- data.table::copy(dt)
-      n <- nrow(private$base_dt)
-      private$nodes <- list(
-        root = list(
-          parent              = NA_character_,
-          status              = integer(n),                      # all 0L (included)
-          branched_at_status  = integer(n),
-          log_entries         = list(),
-          branched_at_log_len = 0L,
-          branched_at_n       = n,
-          artifacts           = list(),
-          frozen              = FALSE,
-          replay_cursor       = 0L
-        )
-      )
-      invisible(self)
     },
 
     #' @description
@@ -309,8 +296,11 @@ CohortPipeline <- R6::R6Class(
     #' subsequent exclusions in the parent do not propagate to the child.
     #' @param name Character. Name of the new cohort.
     #' @param from Character. Name of the parent cohort.
+    #' @param label Optional character. Display label for the cohort
+    #'   (used in CONSORT diagrams and `list_cohorts()`); defaults to
+    #'   `name`. May be refreshed silently across cache replays.
     #' @return The pipeline (invisibly).
-    new_cohort = function(name, from) {
+    new_cohort = function(name, from, label = NULL) {
       if (!from %in% names(private$nodes)) {
         stop("new_cohort: unknown parent '", from, "'.", call. = FALSE)
       }
@@ -321,6 +311,10 @@ CohortPipeline <- R6::R6Class(
           # Cache replay: cohort already exists with matching parent.
           # Trust the cache invariant -- if it survived earlier cascade
           # invalidations, its inherited prefix is consistent.
+          # Label is presentation only; refresh it without invalidating.
+          if (!is.null(label)) {
+            private$nodes[[name]]$label <- label
+          }
           private$nodes[[from]]$frozen <- TRUE
           return(invisible(self))
         }
@@ -333,6 +327,7 @@ CohortPipeline <- R6::R6Class(
       parent_node <- private$nodes[[from]]
       private$nodes[[name]] <- list(
         parent              = from,
+        label               = label %||% name,
         status              = parent_node$status,
         branched_at_status  = parent_node$status,
         log_entries         = parent_node$log_entries,
@@ -740,8 +735,8 @@ CohortPipeline <- R6::R6Class(
                     width = NULL, height = NULL,
                     text_width = 40, title_fontsize = 14) {
       if (length(private$nodes) == 0L) {
-        stop("plot: pipeline has no cohorts. Call $load(dt) first.",
-          call. = FALSE)
+        stop("plot: pipeline has no cohorts. Construct with ",
+          "CohortPipeline$new(dt) first.", call. = FALSE)
       }
       if (is.null(cohorts)) {
         cohorts <- names(private$nodes)
@@ -772,7 +767,7 @@ CohortPipeline <- R6::R6Class(
     print = function(...) {
       cat("<CohortPipeline>\n")
       if (length(private$nodes) == 0L) {
-        cat("  (empty -- call $load(dt) to install a base table)\n")
+        cat("  (empty -- construct with CohortPipeline$new(dt) to install a base table)\n")
         return(invisible(self))
       }
       n_total <- self$n_total()
@@ -873,6 +868,28 @@ CohortPipeline <- R6::R6Class(
     auto_validate  = FALSE,
     cache_file     = NULL,
 
+    # Install dt as the shared base table and create the root cohort.
+    # Called from the constructor; not part of the public API.
+    install_base = function(dt, label) {
+      stopifnot(is.data.table(dt))
+      private$base_dt <- data.table::copy(dt)
+      n <- nrow(private$base_dt)
+      private$nodes <- list(
+        root = list(
+          parent              = NA_character_,
+          label               = label,
+          status              = integer(n),                      # all 0L (included)
+          branched_at_status  = integer(n),
+          log_entries         = list(),
+          branched_at_log_len = 0L,
+          branched_at_n       = n,
+          artifacts           = list(),
+          frozen              = FALSE,
+          replay_cursor       = 0L
+        )
+      )
+    },
+
     # Read-only access to the shared base table for plotting helpers.
     get_base_dt = function() private$base_dt,
     get_nodes   = function() private$nodes,
@@ -887,14 +904,17 @@ CohortPipeline <- R6::R6Class(
     },
 
     # Build the panels list for $plot(). One panel per cohort, walking
-    # the root-to-cohort path. Box labels = cohort names; panel title =
-    # the leaf cohort name.
+    # the root-to-cohort path. Box labels and panel titles use each
+    # cohort's display label (falling back to its identifier).
     build_default_panels = function(cohorts) {
+      label_of <- function(nm) {
+        private$nodes[[nm]]$label %||% nm
+      }
       panels <- list()
       for (co in cohorts) {
         path <- private$ancestor_path(co)  # root-first character vector
-        names(path) <- path
-        panels[[co]] <- path
+        names(path) <- vapply(path, label_of, character(1L))
+        panels[[label_of(co)]] <- path
       }
       panels
     },

@@ -2,6 +2,19 @@
 
 Initial release.
 
+## Display labels and API simplification
+
+- `load()` is no longer a public method; the constructor is the only
+  way to install the base data. Use `CohortPipeline$new(dt)` (with
+  optional `cache_file`).
+- `CohortPipeline$new()` and `new_cohort()` accept a `label =`
+  argument: a human-readable display label used by CONSORT diagrams
+  and `list_cohorts()`. Cohort identifiers (`"root"`, `"adults_female"`)
+  remain how you reference cohorts in code; labels are presentation
+  only.
+- Re-issuing `new_cohort()` with a different label silently updates
+  the field without invalidating the cache.
+
 ## Incremental caching (new)
 
 - `CohortPipeline$new()` accepts a `cache_file = ` argument. When the

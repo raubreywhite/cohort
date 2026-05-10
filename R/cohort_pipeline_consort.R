@@ -216,8 +216,8 @@
 # Coordinates use a top-down y axis (y = 0 at the top).
 #' @keywords internal
 .layout_panel <- function(rows,
-                          pad_h = 2.0, pad_v = 1.5,
-                          line_h = 4.5, char_w = 2.0,
+                          pad_h = 3.0, pad_v = 2.0,
+                          line_h = 4.5, char_w = 2.4,
                           min_v_gap = 8.0, h_gap = 8.0,
                           v_pad_in_gap = 2.0,
                           title_pad = 8.0, margin = 4.0,
@@ -328,7 +328,7 @@
 .panel_grob <- function(layout, title,
                         title_fontsize = 14, box_fontsize = 10,
                         common_h = NULL) {
-  pad_h <- 2.0  # must match .layout_panel's horizontal box padding
+  pad_h <- 3.0  # must match .layout_panel's horizontal box padding
   total_h <- common_h %||% layout$total_h
 
   vp <- grid::viewport(

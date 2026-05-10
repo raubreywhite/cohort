@@ -45,8 +45,8 @@ you can branch a frozen cohort as many times as you like.
 \section{Mutation contract}{
 
 \itemize{
-\item \verb{$load(dt)} makes a defensive copy of \code{dt} once. The user's data table
-is never modified.
+\item \code{CohortPipeline$new(dt)} makes a defensive copy of \code{dt} once. The
+user's data table is never modified.
 \item \verb{$get_included(cohort)} returns an independent copy. The caller may
 mutate it freely without affecting any other cohort or the shared
 base table.
@@ -61,8 +61,10 @@ vector.
 \section{Public API}{
 
 \itemize{
-\item \verb{$load(dt)} -- install the shared base table as the root cohort.
-\item \verb{$new_cohort(name, from)} -- branch from an existing cohort.
+\item \code{CohortPipeline$new(dt, cache_file, label)} -- construct a pipeline
+with a shared base table installed as the root cohort. With
+\code{cache_file}, restore from a prior run if the file exists.
+\item \verb{$new_cohort(name, from, label)} -- branch from an existing cohort.
 \item \verb{$exclude_and_track(branch, reason, expr_str)} -- apply a string-form
 predicate and log the exclusion.
 \item \verb{$set_artifact(name, from, fn, argset)} -- cache a derived object on a
@@ -103,8 +105,7 @@ if (requireNamespace("data.table", quietly = TRUE)) {
     sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
   )
 
-  cp <- CohortPipeline$new()
-  cp$load(d)
+  cp <- CohortPipeline$new(d)
 
   # Root-level exclusions on the shared base
   cp$exclude_and_track("root", "Missing sex",     "is.na(sex)")
@@ -129,7 +130,6 @@ if (requireNamespace("data.table", quietly = TRUE)) {
 \subsection{Public methods}{
   \itemize{
     \item \href{#method-CohortPipeline-initialize}{\code{CohortPipeline$new()}}
-    \item \href{#method-CohortPipeline-load}{\code{CohortPipeline$load()}}
     \item \href{#method-CohortPipeline-declare_schema}{\code{CohortPipeline$declare_schema()}}
     \item \href{#method-CohortPipeline-validate}{\code{CohortPipeline$validate()}}
     \item \href{#method-CohortPipeline-list_schemas}{\code{CohortPipeline$list_schemas()}}
@@ -156,18 +156,26 @@ if (requireNamespace("data.table", quietly = TRUE)) {
 \if{html}{\out{<a id="method-CohortPipeline-initialize"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-initialize}{}}}
 \subsection{\code{CohortPipeline$new()}}{
-  Create a new (empty or seeded) \code{CohortPipeline}.
+  Create a new \code{CohortPipeline}. If \code{cache_file} is set and the file
+exists, the pipeline is restored from that snapshot and \code{dt} is
+used only as a sanity check (its dimensions and column names must
+match the cached base table). Otherwise \code{dt} is installed as the
+root cohort.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$new(dt = NULL, cache_file = NULL, auto_validate = FALSE)}
+    \preformatted{CohortPipeline$new(
+  dt = NULL,
+  cache_file = NULL,
+  label = NULL,
+  auto_validate = FALSE
+)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{dt}}{Optional \code{data.table} to install as the root cohort. If
-\code{NULL} (the default), the pipeline starts empty and the user
-should call \verb{$load()} before any other method.}
+      \item{\code{dt}}{A \code{data.table} to install as the root cohort. Required
+on cold construction; optional on warm cache load.}
       \item{\code{cache_file}}{Optional character path. When supplied, an
 incremental cache is enabled. If the file exists, the pipeline
 is restored from it and subsequent operations replay the
@@ -175,6 +183,10 @@ recorded log on cache hits, recomputing only divergent steps.
 If the file does not exist, fresh state is built and \verb{$save()}
 writes to this path. Recommended idiom for scripts:
 \code{on.exit(cp$save(), add = TRUE)} near the top.}
+      \item{\code{label}}{Optional character. Display label for the root cohort
+(used in CONSORT diagrams and \code{list_cohorts()}). Defaults to
+\code{"Cohort participants"}. Refreshed silently on warm cache load
+so changing the label between runs is allowed.}
       \item{\code{auto_validate}}{Logical. When \code{TRUE}, \verb{$validate()} is invoked
 automatically after every \verb{$new_cohort()} and \verb{$set_artifact()}
 call so schema mismatches stop at the failure site rather than
@@ -185,30 +197,6 @@ accumulating until the next manual \verb{$validate()}. Defaults to
   }
   \subsection{Returns}{
     A new \code{CohortPipeline} instance.
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-load"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-load}{}}}
-\subsection{\code{CohortPipeline$load()}}{
-  Install a \code{data.table} as the shared base table and create a root
-cohort named \code{"root"}. The user's table is copied once; subsequent
-modifications to the user's \code{dt} do not affect the pipeline.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$load(dt)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{dt}}{A \code{data.table} containing one row per subject.}
-    }
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    The pipeline (invisibly), for chaining.
   }
 }
 
@@ -302,7 +290,7 @@ cohort starts identical to its parent at the moment of branching;
 subsequent exclusions in the parent do not propagate to the child.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$new_cohort(name, from)}
+    \preformatted{CohortPipeline$new_cohort(name, from, label = NULL)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
@@ -310,6 +298,9 @@ subsequent exclusions in the parent do not propagate to the child.
     \describe{
       \item{\code{name}}{Character. Name of the new cohort.}
       \item{\code{from}}{Character. Name of the parent cohort.}
+      \item{\code{label}}{Optional character. Display label for the cohort
+(used in CONSORT diagrams and \code{list_cohorts()}); defaults to
+\code{name}. May be refreshed silently across cache replays.}
     }
     \if{html}{\out{</div>}}
   }

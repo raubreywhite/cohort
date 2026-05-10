@@ -9,10 +9,9 @@ make_test_dt <- function() {
   )
 }
 
-test_that("load installs root cohort and copies user data", {
+test_that("constructor installs root cohort and copies user data", {
   d <- make_test_dt()
-  cp <- CohortPipeline$new()
-  cp$load(d)
+  cp <- CohortPipeline$new(d)
 
   expect_equal(cp$n_total(), 10L)
   expect_equal(cp$n_included("root"), 10L)

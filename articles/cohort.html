@@ -110,11 +110,22 @@ downstream.</p>
 <h3 id="step-1-install-a-base-table">Step 1: install a base table<a class="anchor" aria-label="anchor" href="#step-1-install-a-base-table"></a>
 </h3>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">load</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span></span>
+<span>  <span class="va">d</span>,</span>
+<span>  cache_file <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"cohort_cache.rds"</span><span class="op">)</span>,</span>
+<span>  label      <span class="op">=</span> <span class="st">"Eligible patients"</span></span>
+<span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="va">cp</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p><code>CohortPipeline$new()</code> makes a defensive copy of
 <code>d</code> once. The user’s data table is never mutated, no matter
 what subsequent operations you run on the pipeline.</p>
+<p>The <code>cache_file</code> argument enables incremental
+re-execution: on the first run a snapshot is written to disk; on
+subsequent runs the snapshot is restored and matching operations replay
+instantly without recomputation. The <code>label</code> argument is the
+cohort’s display label in CONSORT diagrams (defaults to
+<code>"Cohort participants"</code>); the identifier <code>"root"</code>
+is universal and always used in code.</p>
 </div>
 <div class="section level3">
 <h3 id="step-2-apply-root-level-exclusions">Step 2: apply root-level exclusions<a class="anchor" aria-label="anchor" href="#step-2-apply-root-level-exclusions"></a>
@@ -134,11 +145,17 @@ included on the branch.</p>
 <h3 id="step-3-branch-into-sub-cohorts">Step 3: branch into sub-cohorts<a class="anchor" aria-label="anchor" href="#step-3-branch-into-sub-cohorts"></a>
 </h3>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span>, label <span class="op">=</span> <span class="st">"Adult females"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
+<span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, from <span class="op">=</span> <span class="st">"root"</span>,</span>
+<span>              label <span class="op">=</span> <span class="st">"Adults, group A"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, <span class="st">"Group not a"</span>, <span class="st">"grp != 'a'"</span><span class="op">)</span></span></code></pre></div>
+<p>Identifiers (<code>"adults_female"</code>,
+<code>"adults_grp_a"</code>) are what your code references; labels are
+what shows up in figures. Re-issuing <code>new_cohort()</code> with a
+different label silently updates the label without invalidating the
+cache.</p>
 <p>A branch starts identical to its parent at the moment of branching.
 Sibling branches evolve independently.</p>
 </div>
@@ -293,24 +310,11 @@ use <code>$draw_consort_panels()</code> (see
 <code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code>).</p>
 </div>
 <div class="section level2">
-<h2 id="incremental-caching">Incremental caching<a class="anchor" aria-label="anchor" href="#incremental-caching"></a>
+<h2 id="how-the-cache-decides-what-to-recompute">How the cache decides what to recompute<a class="anchor" aria-label="anchor" href="#how-the-cache-decides-what-to-recompute"></a>
 </h2>
-<p>For long-running scripts, supply a <code>cache_file</code> to
-<code>CohortPipeline$new()</code> to enable incremental re-execution. On
-the first run, a snapshot of the pipeline is written to disk; on
-subsequent runs, the snapshot is loaded and each operation in the script
-is replayed against it. Operations matching the cached log are no-ops
-(cursor advances, no work); divergent operations truncate the log and
-recompute only the affected cohort and its descendants.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">d</span>, cache_file <span class="op">=</span> <span class="st">"cache/cp.rds"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="va">cp</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>, <span class="st">"is.na(sex)"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,    <span class="st">"age &lt; 18"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span></code></pre></div>
-<p>Cache hits compare:</p>
+<p>The worked example above already uses <code>cache_file</code> and
+<code>on.exit(cp$save())</code>. On the second run of the same script,
+every operation is checked against the cached log:</p>
 <table class="table">
 <thead><tr class="header">
 <th>Method</th>
@@ -335,14 +339,19 @@ recompute only the affected cohort and its descendants.</p>
 </tr>
 </tbody>
 </table>
-<p>For <code>set_artifact</code>, the 3-argument form
-<code>function(dt, sib, argset)</code> is recommended when caching: the
-<code>argset</code> list carries the data dependencies explicitly and
-participates in the cache key, so changing
-e.g. <code>argset = list(washout = 84L)</code> to
-<code>washout = 90L</code> triggers a recompute. The 2-argument form
-<code>function(dt, sib)</code> still works but won’t catch
-closure-captured changes.</p>
+<p>A match advances the replay cursor with no work done. A mismatch
+truncates the log at that point, drops downstream artifacts, cascades to
+descendant cohorts whose inherited prefix is now stale, and recomputes
+only what changed. Labels are presentation, not part of the cache key,
+so re-issuing
+<code>new_cohort("adults_female", from = "root", label = "Adult women")</code>
+updates the label without invalidating anything.</p>
+<p>For <code>set_artifact</code>, prefer the 3-argument signature
+<code>function(dt, sib, argset)</code>: data dependencies in
+<code>argset</code> participate in the cache key, so changing
+<code>argset = list(washout = 84L)</code> to <code>washout = 90L</code>
+triggers a recompute. The 2-argument form <code>function(dt, sib)</code>
+still works but won’t catch closure-captured changes.</p>
 <p>The cache key uses <code>body(fn)</code> literally; if
 <code>fn</code> calls a helper that you change, the cache cannot detect
 that. Either include a version tag in <code>argset</code>, or call

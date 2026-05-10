@@ -102,8 +102,8 @@ you can branch a frozen cohort as many times as you like.</p>
     <h2>Mutation contract</h2>
 
 
-<ul><li><p><code>$load(dt)</code> makes a defensive copy of <code>dt</code> once. The user's data table
-is never modified.</p></li>
+<ul><li><p><code>CohortPipeline$new(dt)</code> makes a defensive copy of <code>dt</code> once. The
+user's data table is never modified.</p></li>
 <li><p><code>$get_included(cohort)</code> returns an independent copy. The caller may
 mutate it freely without affecting any other cohort or the shared
 base table.</p></li>
@@ -117,8 +117,10 @@ vector.</p></li>
     <h2>Public API</h2>
 
 
-<ul><li><p><code>$load(dt)</code> – install the shared base table as the root cohort.</p></li>
-<li><p><code>$new_cohort(name, from)</code> – branch from an existing cohort.</p></li>
+<ul><li><p><code>CohortPipeline$new(dt, cache_file, label)</code> – construct a pipeline
+with a shared base table installed as the root cohort. With
+<code>cache_file</code>, restore from a prior run if the file exists.</p></li>
+<li><p><code>$new_cohort(name, from, label)</code> – branch from an existing cohort.</p></li>
 <li><p><code>$exclude_and_track(branch, reason, expr_str)</code> – apply a string-form
 predicate and log the exclusion.</p></li>
 <li><p><code>$set_artifact(name, from, fn, argset)</code> – cache a derived object on a
@@ -155,7 +157,6 @@ serializable and auditable.</p>
 <div class="section">
 <h3 id="public-methods">Public methods<a class="anchor" aria-label="anchor" href="#public-methods"></a></h3>
 <p></p><ul><li><p><a href="#method-CohortPipeline-initialize"><code>CohortPipeline$new()</code></a></p></li>
-<li><p><a href="#method-CohortPipeline-load"><code>CohortPipeline$load()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-declare_schema"><code>CohortPipeline$declare_schema()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-validate"><code>CohortPipeline$validate()</code></a></p></li>
 <li><p><a href="#method-CohortPipeline-list_schemas"><code>CohortPipeline$list_schemas()</code></a></p></li>
@@ -178,15 +179,23 @@ serializable and auditable.</p>
 <li><p><a href="#method-CohortPipeline-invalidate"><code>CohortPipeline$invalidate()</code></a></p></li>
 </ul></div><p></p><hr><a id="method-CohortPipeline-initialize"></a><div class="section">
 <h3 id="cohortpipeline-new-"><code>CohortPipeline$new()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-new-"></a></h3>
-<p>Create a new (empty or seeded) <code>CohortPipeline</code>.</p><div class="section">
+<p>Create a new <code>CohortPipeline</code>. If <code>cache_file</code> is set and the file
+exists, the pipeline is restored from that snapshot and <code>dt</code> is
+used only as a sanity check (its dimensions and column names must
+match the cached base table). Otherwise <code>dt</code> is installed as the
+root cohort.</p><div class="section">
 <h4 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span>dt <span class="op">=</span> <span class="cn">NULL</span>, cache_file <span class="op">=</span> <span class="cn">NULL</span>, auto_validate <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va"><a href="../reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span></span>
+<span>  dt <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  cache_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  label <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  auto_validate <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
 <h4 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>dt</code></dt>
-<dd><p>Optional <code>data.table</code> to install as the root cohort. If
-<code>NULL</code> (the default), the pipeline starts empty and the user
-should call <code>$load()</code> before any other method.</p></dd>
+<dd><p>A <code>data.table</code> to install as the root cohort. Required
+on cold construction; optional on warm cache load.</p></dd>
 
       <dt><code>cache_file</code></dt>
 <dd><p>Optional character path. When supplied, an
@@ -196,6 +205,12 @@ recorded log on cache hits, recomputing only divergent steps.
 If the file does not exist, fresh state is built and <code>$save()</code>
 writes to this path. Recommended idiom for scripts:
 <code>on.exit(cp$save(), add = TRUE)</code> near the top.</p></dd>
+
+      <dt><code>label</code></dt>
+<dd><p>Optional character. Display label for the root cohort
+(used in CONSORT diagrams and <code>list_cohorts()</code>). Defaults to
+<code>"Cohort participants"</code>. Refreshed silently on warm cache load
+so changing the label between runs is allowed.</p></dd>
 
       <dt><code>auto_validate</code></dt>
 <dd><p>Logical. When <code>TRUE</code>, <code>$validate()</code> is invoked
@@ -213,36 +228,15 @@ accumulating until the next manual <code>$validate()</code>. Defaults to
 
 </div>
 
-<p></p><hr><a id="method-CohortPipeline-load"></a><div class="section">
-<h3 id="cohortpipeline-load-"><code>CohortPipeline$load()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-load-"></a></h3>
-<p>Install a <code>data.table</code> as the shared base table and create a root
-cohort named <code>"root"</code>. The user's table is copied once; subsequent
-modifications to the user's <code>dt</code> do not affect the pipeline.</p><div class="section">
-<h4 id="usage-1">Usage<a class="anchor" aria-label="anchor" href="#usage-1"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">load</span><span class="op">(</span><span class="va">dt</span><span class="op">)</span></span></code></pre></div><p></p></div>
-</div><p></p><div class="section">
-<h4 id="arguments-1">Arguments<a class="anchor" aria-label="anchor" href="#arguments-1"></a></h4>
-<p></p><div class="arguments"><dl><dt><code>dt</code></dt>
-<dd><p>A <code>data.table</code> containing one row per subject.</p></dd>
-
-
-</dl><p></p></div>
-</div><p></p><div class="section">
-<h4 id="returns-1">Returns<a class="anchor" aria-label="anchor" href="#returns-1"></a></h4>
-<p>The pipeline (invisibly), for chaining.</p>
-</div>
-
-</div>
-
 <p></p><hr><a id="method-CohortPipeline-declare_schema"></a><div class="section">
 <h3 id="cohortpipeline-declare-schema-"><code>CohortPipeline$declare_schema()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-declare-schema-"></a></h3>
 <p>Declare a column-type / level / NA contract for a branch. Validation
 runs only when <code>$validate()</code> is called (or automatically when the
 pipeline was constructed with <code>auto_validate = TRUE</code>).</p><div class="section">
-<h4 id="usage-2">Usage<a class="anchor" aria-label="anchor" href="#usage-2"></a></h4>
+<h4 id="usage-1">Usage<a class="anchor" aria-label="anchor" href="#usage-1"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">declare_schema</span><span class="op">(</span><span class="va">branch</span>, schema <span class="op">=</span> <span class="cn">NULL</span>, from <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-2">Arguments<a class="anchor" aria-label="anchor" href="#arguments-2"></a></h4>
+<h4 id="arguments-1">Arguments<a class="anchor" aria-label="anchor" href="#arguments-1"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>branch</code></dt>
 <dd><p>Character. Branch name to attach the schema to.</p></dd>
 
@@ -262,7 +256,7 @@ as a copy of the schema attached to <code>from</code> and the entries in
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-2">Returns<a class="anchor" aria-label="anchor" href="#returns-2"></a></h4>
+<h4 id="returns-1">Returns<a class="anchor" aria-label="anchor" href="#returns-1"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -272,10 +266,10 @@ as a copy of the schema attached to <code>from</code> and the entries in
 <h3 id="cohortpipeline-validate-"><code>CohortPipeline$validate()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-validate-"></a></h3>
 <p>Validate every declared schema against the included rows of its
 branch. Throws an error listing every mismatch found.</p><div class="section">
-<h4 id="usage-3">Usage<a class="anchor" aria-label="anchor" href="#usage-3"></a></h4>
+<h4 id="usage-2">Usage<a class="anchor" aria-label="anchor" href="#usage-2"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">validate</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-3">Returns<a class="anchor" aria-label="anchor" href="#returns-3"></a></h4>
+<h4 id="returns-2">Returns<a class="anchor" aria-label="anchor" href="#returns-2"></a></h4>
 <p>The pipeline (invisibly), if validation passes.</p>
 </div>
 
@@ -284,10 +278,10 @@ branch. Throws an error listing every mismatch found.</p><div class="section">
 <p></p><hr><a id="method-CohortPipeline-list_schemas"></a><div class="section">
 <h3 id="cohortpipeline-list-schemas-"><code>CohortPipeline$list_schemas()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-list-schemas-"></a></h3>
 <p>Tabulate the names and column counts of all declared schemas.</p><div class="section">
-<h4 id="usage-4">Usage<a class="anchor" aria-label="anchor" href="#usage-4"></a></h4>
+<h4 id="usage-3">Usage<a class="anchor" aria-label="anchor" href="#usage-3"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">list_schemas</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-4">Returns<a class="anchor" aria-label="anchor" href="#returns-4"></a></h4>
+<h4 id="returns-3">Returns<a class="anchor" aria-label="anchor" href="#returns-3"></a></h4>
 <p>A <code>data.table</code> with columns <code>branch</code> and <code>n_cols</code>.</p>
 </div>
 
@@ -296,10 +290,10 @@ branch. Throws an error listing every mismatch found.</p><div class="section">
 <p></p><hr><a id="method-CohortPipeline-get_schemas"></a><div class="section">
 <h3 id="cohortpipeline-get-schemas-"><code>CohortPipeline$get_schemas()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-get-schemas-"></a></h3>
 <p>Return the raw schema list for inspection.</p><div class="section">
-<h4 id="usage-5">Usage<a class="anchor" aria-label="anchor" href="#usage-5"></a></h4>
+<h4 id="usage-4">Usage<a class="anchor" aria-label="anchor" href="#usage-4"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">get_schemas</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-5">Returns<a class="anchor" aria-label="anchor" href="#returns-5"></a></h4>
+<h4 id="returns-4">Returns<a class="anchor" aria-label="anchor" href="#returns-4"></a></h4>
 <p>A named list of schemas.</p>
 </div>
 
@@ -310,20 +304,25 @@ branch. Throws an error listing every mismatch found.</p><div class="section">
 <p>Create a new cohort branched from an existing cohort. The new
 cohort starts identical to its parent at the moment of branching;
 subsequent exclusions in the parent do not propagate to the child.</p><div class="section">
-<h4 id="usage-6">Usage<a class="anchor" aria-label="anchor" href="#usage-6"></a></h4>
-<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="va">name</span>, <span class="va">from</span><span class="op">)</span></span></code></pre></div><p></p></div>
+<h4 id="usage-5">Usage<a class="anchor" aria-label="anchor" href="#usage-5"></a></h4>
+<p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="va">name</span>, <span class="va">from</span>, label <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-3">Arguments<a class="anchor" aria-label="anchor" href="#arguments-3"></a></h4>
+<h4 id="arguments-2">Arguments<a class="anchor" aria-label="anchor" href="#arguments-2"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>name</code></dt>
 <dd><p>Character. Name of the new cohort.</p></dd>
 
       <dt><code>from</code></dt>
 <dd><p>Character. Name of the parent cohort.</p></dd>
 
+      <dt><code>label</code></dt>
+<dd><p>Optional character. Display label for the cohort
+(used in CONSORT diagrams and <code>list_cohorts()</code>); defaults to
+<code>name</code>. May be refreshed silently across cache replays.</p></dd>
+
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-6">Returns<a class="anchor" aria-label="anchor" href="#returns-6"></a></h4>
+<h4 id="returns-5">Returns<a class="anchor" aria-label="anchor" href="#returns-5"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -336,10 +335,10 @@ the exclusion log. The predicate is evaluated against the included
 subset of the base table; rows for which the predicate evaluates
 to <code>TRUE</code> are excluded with the supplied reason. <code>NA</code> predicate
 results are treated as <code>FALSE</code>.</p><div class="section">
-<h4 id="usage-7">Usage<a class="anchor" aria-label="anchor" href="#usage-7"></a></h4>
+<h4 id="usage-6">Usage<a class="anchor" aria-label="anchor" href="#usage-6"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="va">branch</span>, <span class="va">reason</span>, <span class="va">expr_str</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-4">Arguments<a class="anchor" aria-label="anchor" href="#arguments-4"></a></h4>
+<h4 id="arguments-3">Arguments<a class="anchor" aria-label="anchor" href="#arguments-3"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>branch</code></dt>
 <dd><p>Character. Cohort to apply the exclusion to.</p></dd>
 
@@ -353,7 +352,7 @@ results are treated as <code>FALSE</code>.</p><div class="section">
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-7">Returns<a class="anchor" aria-label="anchor" href="#returns-7"></a></h4>
+<h4 id="returns-6">Returns<a class="anchor" aria-label="anchor" href="#returns-6"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -375,10 +374,10 @@ relying on <code>cache_file</code>).</p>
 a helper that you change, the cache cannot detect that. Either
 include the helper's output / a version tag in <code>argset</code>, or call
 <code>$invalidate()</code> to force recompute.</p><div class="section">
-<h4 id="usage-8">Usage<a class="anchor" aria-label="anchor" href="#usage-8"></a></h4>
+<h4 id="usage-7">Usage<a class="anchor" aria-label="anchor" href="#usage-7"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="va">name</span>, <span class="va">from</span>, <span class="va">fn</span>, argset <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-5">Arguments<a class="anchor" aria-label="anchor" href="#arguments-5"></a></h4>
+<h4 id="arguments-4">Arguments<a class="anchor" aria-label="anchor" href="#arguments-4"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>name</code></dt>
 <dd><p>Character. Artifact name (must be unique on the cohort).</p></dd>
 
@@ -398,7 +397,7 @@ cache key. Use the 3-argument <code>fn</code> signature to read these out.</p></
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-8">Returns<a class="anchor" aria-label="anchor" href="#returns-8"></a></h4>
+<h4 id="returns-7">Returns<a class="anchor" aria-label="anchor" href="#returns-7"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -409,17 +408,17 @@ cache key. Use the 3-argument <code>fn</code> signature to read these out.</p></
 <p>Return an independent copy of the included rows of a cohort. The
 returned <code>data.table</code> may be mutated freely without affecting the
 shared base table or any other cohort.</p><div class="section">
-<h4 id="usage-9">Usage<a class="anchor" aria-label="anchor" href="#usage-9"></a></h4>
+<h4 id="usage-8">Usage<a class="anchor" aria-label="anchor" href="#usage-8"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">get_included</span><span class="op">(</span><span class="va">cohort</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-6">Arguments<a class="anchor" aria-label="anchor" href="#arguments-6"></a></h4>
+<h4 id="arguments-5">Arguments<a class="anchor" aria-label="anchor" href="#arguments-5"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort name.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-9">Returns<a class="anchor" aria-label="anchor" href="#returns-9"></a></h4>
+<h4 id="returns-8">Returns<a class="anchor" aria-label="anchor" href="#returns-8"></a></h4>
 <p>A <code>data.table</code>.</p>
 </div>
 
@@ -431,17 +430,17 @@ shared base table or any other cohort.</p><div class="section">
 reconstructed from this branch's exclusion history. Included rows
 are labeled <code>"included"</code>; excluded rows carry the reason of the
 first exclusion that caught them.</p><div class="section">
-<h4 id="usage-10">Usage<a class="anchor" aria-label="anchor" href="#usage-10"></a></h4>
+<h4 id="usage-9">Usage<a class="anchor" aria-label="anchor" href="#usage-9"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">get_everyone</span><span class="op">(</span><span class="va">cohort</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-7">Arguments<a class="anchor" aria-label="anchor" href="#arguments-7"></a></h4>
+<h4 id="arguments-6">Arguments<a class="anchor" aria-label="anchor" href="#arguments-6"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort name.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-10">Returns<a class="anchor" aria-label="anchor" href="#returns-10"></a></h4>
+<h4 id="returns-9">Returns<a class="anchor" aria-label="anchor" href="#returns-9"></a></h4>
 <p>A <code>data.table</code> of the same height as the base table, with
 one extra column <code>.cohort_status</code>.</p>
 </div>
@@ -451,10 +450,10 @@ one extra column <code>.cohort_status</code>.</p>
 <p></p><hr><a id="method-CohortPipeline-get_artifact"></a><div class="section">
 <h3 id="cohortpipeline-get-artifact-"><code>CohortPipeline$get_artifact()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-get-artifact-"></a></h3>
 <p>Retrieve a cached artifact from a cohort.</p><div class="section">
-<h4 id="usage-11">Usage<a class="anchor" aria-label="anchor" href="#usage-11"></a></h4>
+<h4 id="usage-10">Usage<a class="anchor" aria-label="anchor" href="#usage-10"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="va">cohort</span>, <span class="va">name</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-8">Arguments<a class="anchor" aria-label="anchor" href="#arguments-8"></a></h4>
+<h4 id="arguments-7">Arguments<a class="anchor" aria-label="anchor" href="#arguments-7"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort name.</p></dd>
 
@@ -464,7 +463,7 @@ one extra column <code>.cohort_status</code>.</p>
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-11">Returns<a class="anchor" aria-label="anchor" href="#returns-11"></a></h4>
+<h4 id="returns-10">Returns<a class="anchor" aria-label="anchor" href="#returns-10"></a></h4>
 <p>The cached artifact (any type).</p>
 </div>
 
@@ -473,17 +472,17 @@ one extra column <code>.cohort_status</code>.</p>
 <p></p><hr><a id="method-CohortPipeline-n_included"></a><div class="section">
 <h3 id="cohortpipeline-n-included-"><code>CohortPipeline$n_included()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-n-included-"></a></h3>
 <p>Number of included rows in a cohort.</p><div class="section">
-<h4 id="usage-12">Usage<a class="anchor" aria-label="anchor" href="#usage-12"></a></h4>
+<h4 id="usage-11">Usage<a class="anchor" aria-label="anchor" href="#usage-11"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">n_included</span><span class="op">(</span><span class="va">cohort</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-9">Arguments<a class="anchor" aria-label="anchor" href="#arguments-9"></a></h4>
+<h4 id="arguments-8">Arguments<a class="anchor" aria-label="anchor" href="#arguments-8"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort name.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-12">Returns<a class="anchor" aria-label="anchor" href="#returns-12"></a></h4>
+<h4 id="returns-11">Returns<a class="anchor" aria-label="anchor" href="#returns-11"></a></h4>
 <p>Integer.</p>
 </div>
 
@@ -492,10 +491,10 @@ one extra column <code>.cohort_status</code>.</p>
 <p></p><hr><a id="method-CohortPipeline-n_total"></a><div class="section">
 <h3 id="cohortpipeline-n-total-"><code>CohortPipeline$n_total()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-n-total-"></a></h3>
 <p>Total number of rows in the shared base table.</p><div class="section">
-<h4 id="usage-13">Usage<a class="anchor" aria-label="anchor" href="#usage-13"></a></h4>
+<h4 id="usage-12">Usage<a class="anchor" aria-label="anchor" href="#usage-12"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">n_total</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-13">Returns<a class="anchor" aria-label="anchor" href="#returns-13"></a></h4>
+<h4 id="returns-12">Returns<a class="anchor" aria-label="anchor" href="#returns-12"></a></h4>
 <p>Integer.</p>
 </div>
 
@@ -505,10 +504,10 @@ one extra column <code>.cohort_status</code>.</p>
 <h3 id="cohortpipeline-list-cohorts-"><code>CohortPipeline$list_cohorts()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-list-cohorts-"></a></h3>
 <p>Tabulate every cohort with its parent, sizes and number of own
 exclusion steps and artifacts.</p><div class="section">
-<h4 id="usage-14">Usage<a class="anchor" aria-label="anchor" href="#usage-14"></a></h4>
+<h4 id="usage-13">Usage<a class="anchor" aria-label="anchor" href="#usage-13"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">list_cohorts</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-14">Returns<a class="anchor" aria-label="anchor" href="#returns-14"></a></h4>
+<h4 id="returns-13">Returns<a class="anchor" aria-label="anchor" href="#returns-13"></a></h4>
 <p>A <code>data.table</code> with one row per cohort.</p>
 </div>
 
@@ -517,17 +516,17 @@ exclusion steps and artifacts.</p><div class="section">
 <p></p><hr><a id="method-CohortPipeline-list_artifacts"></a><div class="section">
 <h3 id="cohortpipeline-list-artifacts-"><code>CohortPipeline$list_artifacts()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-list-artifacts-"></a></h3>
 <p>Names of cached artifacts attached to a cohort.</p><div class="section">
-<h4 id="usage-15">Usage<a class="anchor" aria-label="anchor" href="#usage-15"></a></h4>
+<h4 id="usage-14">Usage<a class="anchor" aria-label="anchor" href="#usage-14"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">list_artifacts</span><span class="op">(</span><span class="va">cohort</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-10">Arguments<a class="anchor" aria-label="anchor" href="#arguments-10"></a></h4>
+<h4 id="arguments-9">Arguments<a class="anchor" aria-label="anchor" href="#arguments-9"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort name.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-15">Returns<a class="anchor" aria-label="anchor" href="#returns-15"></a></h4>
+<h4 id="returns-14">Returns<a class="anchor" aria-label="anchor" href="#returns-14"></a></h4>
 <p>Character vector.</p>
 </div>
 
@@ -539,10 +538,10 @@ exclusion steps and artifacts.</p><div class="section">
 Each cohort contributes only its own exclusion steps (steps
 inherited from the parent at branch time are reported under the
 parent, not duplicated).</p><div class="section">
-<h4 id="usage-16">Usage<a class="anchor" aria-label="anchor" href="#usage-16"></a></h4>
+<h4 id="usage-15">Usage<a class="anchor" aria-label="anchor" href="#usage-15"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">consort</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-16">Returns<a class="anchor" aria-label="anchor" href="#returns-16"></a></h4>
+<h4 id="returns-15">Returns<a class="anchor" aria-label="anchor" href="#returns-15"></a></h4>
 <p>A <code>data.table</code> with columns <code>branch</code>, <code>parent</code>, <code>step</code>,
 <code>reason</code>, <code>expr_str</code>, <code>n_excluded</code>, <code>n_remaining</code>.</p>
 </div>
@@ -558,7 +557,7 @@ exclusion steps into bullet blocks.</p>
 root-to-leaf path in the tree and lays them out automatically.
 <code>$draw_consort_panels()</code> is the manual escape hatch for custom
 layouts and labels.</p><div class="section">
-<h4 id="usage-17">Usage<a class="anchor" aria-label="anchor" href="#usage-17"></a></h4>
+<h4 id="usage-16">Usage<a class="anchor" aria-label="anchor" href="#usage-16"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">draw_consort_panels</span><span class="op">(</span></span>
 <span>  <span class="va">panels</span>,</span>
 <span>  file <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -569,7 +568,7 @@ layouts and labels.</p><div class="section">
 <span>  title_fontsize <span class="op">=</span> <span class="fl">14</span></span>
 <span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
+<h4 id="arguments-10">Arguments<a class="anchor" aria-label="anchor" href="#arguments-10"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>panels</code></dt>
 <dd><p>A named list. Each element is either a character
 vector of cohort names (interpreted as the panel's main flow)
@@ -597,7 +596,7 @@ plot is drawn on the active device.</p></dd>
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-17">Returns<a class="anchor" aria-label="anchor" href="#returns-17"></a></h4>
+<h4 id="returns-16">Returns<a class="anchor" aria-label="anchor" href="#returns-16"></a></h4>
 <p>A list of grobs (invisibly).</p>
 </div>
 
@@ -611,7 +610,7 @@ the root-to-cohort path automatically and uses cohort names as
 box labels. With one or more cohort names, plots only those.</p>
 <p>This is the default convenience entry point. Use
 <code>$draw_consort_panels()</code> for custom labels or layouts.</p><div class="section">
-<h4 id="usage-18">Usage<a class="anchor" aria-label="anchor" href="#usage-18"></a></h4>
+<h4 id="usage-17">Usage<a class="anchor" aria-label="anchor" href="#usage-17"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span></span>
 <span>  cohorts <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  file <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -622,7 +621,7 @@ box labels. With one or more cohort names, plots only those.</p>
 <span>  title_fontsize <span class="op">=</span> <span class="fl">14</span></span>
 <span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
+<h4 id="arguments-11">Arguments<a class="anchor" aria-label="anchor" href="#arguments-11"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohorts</code></dt>
 <dd><p>Optional character vector of cohort names. If
 omitted, every cohort is plotted.</p></dd>
@@ -638,7 +637,7 @@ overrides; see <code>$draw_consort_panels()</code>.</p></dd>
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-18">Returns<a class="anchor" aria-label="anchor" href="#returns-18"></a></h4>
+<h4 id="returns-17">Returns<a class="anchor" aria-label="anchor" href="#returns-17"></a></h4>
 <p>A list of grobs (invisibly).</p>
 </div>
 
@@ -648,17 +647,17 @@ overrides; see <code>$draw_consort_panels()</code>.</p></dd>
 <h3 id="cohortpipeline-print-"><code>CohortPipeline$print()</code><a class="anchor" aria-label="anchor" href="#cohortpipeline-print-"></a></h3>
 <p>Concise text summary of the cohort tree, exclusion counts, and
 attached artifacts.</p><div class="section">
-<h4 id="usage-19">Usage<a class="anchor" aria-label="anchor" href="#usage-19"></a></h4>
+<h4 id="usage-18">Usage<a class="anchor" aria-label="anchor" href="#usage-18"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">print</span><span class="op">(</span><span class="va">...</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-13">Arguments<a class="anchor" aria-label="anchor" href="#arguments-13"></a></h4>
+<h4 id="arguments-12">Arguments<a class="anchor" aria-label="anchor" href="#arguments-12"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>...</code></dt>
 <dd><p>Unused.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-19">Returns<a class="anchor" aria-label="anchor" href="#returns-19"></a></h4>
+<h4 id="returns-18">Returns<a class="anchor" aria-label="anchor" href="#returns-18"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -671,17 +670,17 @@ On the next <code>CohortPipeline$new(dt, cache_file = ...)</code> with the same
 file, the saved state is restored and re-issued operations replay
 from the cache; only divergent operations recompute. Idempotent
 beyond the file write.</p><div class="section">
-<h4 id="usage-20">Usage<a class="anchor" aria-label="anchor" href="#usage-20"></a></h4>
+<h4 id="usage-19">Usage<a class="anchor" aria-label="anchor" href="#usage-19"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span>file <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-14">Arguments<a class="anchor" aria-label="anchor" href="#arguments-14"></a></h4>
+<h4 id="arguments-13">Arguments<a class="anchor" aria-label="anchor" href="#arguments-13"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>file</code></dt>
 <dd><p>Optional override for the cache file path.</p></dd>
 
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-20">Returns<a class="anchor" aria-label="anchor" href="#returns-20"></a></h4>
+<h4 id="returns-19">Returns<a class="anchor" aria-label="anchor" href="#returns-19"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -693,10 +692,10 @@ beyond the file write.</p><div class="section">
 descendant) or a single artifact. Use when a helper function called
 from inside a <code>set_artifact</code> <code>fn</code> has changed – the cache key
 (<code>body(fn)</code> + argset) cannot detect that automatically.</p><div class="section">
-<h4 id="usage-21">Usage<a class="anchor" aria-label="anchor" href="#usage-21"></a></h4>
+<h4 id="usage-20">Usage<a class="anchor" aria-label="anchor" href="#usage-20"></a></h4>
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">invalidate</span><span class="op">(</span><span class="va">cohort</span>, artifact <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
-<h4 id="arguments-15">Arguments<a class="anchor" aria-label="anchor" href="#arguments-15"></a></h4>
+<h4 id="arguments-14">Arguments<a class="anchor" aria-label="anchor" href="#arguments-14"></a></h4>
 <p></p><div class="arguments"><dl><dt><code>cohort</code></dt>
 <dd><p>Character. Cohort to invalidate.</p></dd>
 
@@ -708,7 +707,7 @@ is dropped.</p></dd>
 
 </dl><p></p></div>
 </div><p></p><div class="section">
-<h4 id="returns-21">Returns<a class="anchor" aria-label="anchor" href="#returns-21"></a></h4>
+<h4 id="returns-20">Returns<a class="anchor" aria-label="anchor" href="#returns-20"></a></h4>
 <p>The pipeline (invisibly).</p>
 </div>
 
@@ -727,8 +726,7 @@ is dropped.</p></dd>
 <span class="r-in"><span>    sex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="cn">NA</span>, <span class="st">"M"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="st">"M"</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span> <span class="op">&lt;-</span> <span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span></span>
-<span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">load</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">cp</span> <span class="op">&lt;-</span> <span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span>  <span class="co"># Root-level exclusions on the shared base</span></span></span>
 <span class="r-in"><span>  <span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>,     <span class="st">"is.na(sex)"</span><span class="op">)</span></span></span>

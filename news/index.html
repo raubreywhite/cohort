@@ -54,6 +54,14 @@
 <h2 class="page-header" data-toc-text="2026.5.10" id="version-2026510">Version 2026.5.10<a class="anchor" aria-label="anchor" href="#version-2026510"></a></h2>
 <p>Initial release.</p>
 <div class="section level3">
+<h3 id="display-labels-and-api-simplification-2026-5-10">Display labels and API simplification<a class="anchor" aria-label="anchor" href="#display-labels-and-api-simplification-2026-5-10"></a></h3>
+<ul><li>
+<code><a href="https://rdrr.io/r/base/load.html" class="external-link">load()</a></code> is no longer a public method; the constructor is the only way to install the base data. Use <code>CohortPipeline$new(dt)</code> (with optional <code>cache_file</code>).</li>
+<li>
+<code>CohortPipeline$new()</code> and <code>new_cohort()</code> accept a <code>label =</code> argument: a human-readable display label used by CONSORT diagrams and <code>list_cohorts()</code>. Cohort identifiers (<code>"root"</code>, <code>"adults_female"</code>) remain how you reference cohorts in code; labels are presentation only.</li>
+<li>Re-issuing <code>new_cohort()</code> with a different label silently updates the field without invalidating the cache.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="incremental-caching-new-2026-5-10">Incremental caching (new)<a class="anchor" aria-label="anchor" href="#incremental-caching-new-2026-5-10"></a></h3>
 <ul><li>
 <code>CohortPipeline$new()</code> accepts a <code>cache_file =</code> argument. When the file exists, the pipeline is restored from it and operations replay against the cached log; matching operations are no-ops (cache hits), divergent operations recompute only the affected cohort and its descendants. <code>cp$save()</code> writes the current state to the cache file.</li>

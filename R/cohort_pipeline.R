@@ -147,9 +147,18 @@ CohortPipeline <- R6::R6Class(
             .COHORT_CACHE_VERSION, ". Delete the cache to start fresh.",
             call. = FALSE)
         }
-        if (!is.null(dt) && !identical(dim(dt), dim(snap$base_dt))) {
-          warning("CohortPipeline: supplied 'dt' has different dimensions ",
-            "than cached base table; discarding cache.")
+        # Heuristic guard: dimensions + column names. A content-only
+        # change (same shape, different values) is NOT detected; on a
+        # cache hit we use the cached base_dt as the source of truth.
+        # Delete the cache file (or call $invalidate()) when the data
+        # genuinely changes.
+        bad_shape <- !is.null(dt) &&
+          (!identical(dim(dt),   dim(snap$base_dt)) ||
+           !identical(names(dt), names(snap$base_dt)))
+        if (bad_shape) {
+          warning("CohortPipeline: supplied 'dt' has different ",
+            "dimensions or column names than the cached base table; ",
+            "discarding cache.")
           self$load(dt)
         } else {
           private$base_dt <- snap$base_dt
@@ -466,8 +475,10 @@ CohortPipeline <- R6::R6Class(
       if (!from %in% names(private$nodes)) {
         stop("set_artifact: unknown cohort '", from, "'.", call. = FALSE)
       }
-      # Compat shim: 2-arg fn keeps the old (dt, sib) signature; 3-arg fn
-      # gets argset passed explicitly and participates in cache matching.
+      # Compat shim: 2-arg fn keeps the old (dt, sib) signature; 3-arg
+      # (or wider) fn gets argset passed as the third positional
+      # argument. Functions with 4+ formals are accepted -- the extra
+      # arguments must have defaults, since we never pass them.
       n_formals <- length(formals(fn))
       uses_argset <- n_formals >= 3L
 

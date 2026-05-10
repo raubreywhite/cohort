@@ -362,3 +362,22 @@ test_that("cache_file: version mismatch errors loudly", {
                nodes = list(), schemas = list()), cache)
   expect_error(CohortPipeline$new(cache_file = cache), "cache file")
 })
+
+test_that("cache_file: dt content change is detected and rebuilds", {
+  cache <- tempfile(fileext = ".rds")
+  on.exit(unlink(cache), add = TRUE)
+
+  cp <- CohortPipeline$new(make_test_dt(), cache_file = cache)
+  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+  cp$save()
+
+  # Same shape, different values: hash changes -> warn + rebuild.
+  d2 <- make_test_dt()
+  d2[, age := age + 1L]
+  expect_warning(
+    cp2 <- CohortPipeline$new(d2, cache_file = cache),
+    "digest mismatch"
+  )
+  # After rebuild, root has no log entries (we have not re-issued any).
+  expect_equal(nrow(cp2$consort()), 0L)
+})

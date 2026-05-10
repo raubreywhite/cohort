@@ -10,6 +10,7 @@
 
 .Rproj.user
 .Rhistory
+.claude/scheduled_tasks.lock
 inst/doc
 doc
 Meta

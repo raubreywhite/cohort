@@ -3,3 +3,4 @@
 export(CohortPipeline)
 import(R6)
 import(data.table)
+importFrom(digest,digest)

@@ -107,6 +107,7 @@
 #'
 #' @import data.table
 #' @import R6
+#' @importFrom digest digest
 #' @export
 CohortPipeline <- R6::R6Class(
   "CohortPipeline",
@@ -153,23 +154,21 @@ CohortPipeline <- R6::R6Class(
             .COHORT_CACHE_VERSION, ". Delete the cache to start fresh.",
             call. = FALSE)
         }
-        # Heuristic guard: dimensions + column names. A content-only
-        # change (same shape, different values) is NOT detected; on a
-        # cache hit we use the cached base_dt as the source of truth.
-        # Delete the cache file (or call $invalidate()) when the data
-        # genuinely changes.
-        bad_shape <- !is.null(dt) &&
-          (!identical(dim(dt),   dim(snap$base_dt)) ||
-           !identical(names(dt), names(snap$base_dt)))
-        if (bad_shape) {
-          warning("CohortPipeline: supplied 'dt' has different ",
-            "dimensions or column names than the cached base table; ",
-            "discarding cache.")
-          private$install_base(dt, label = label %||% "Cohort participants")
-        } else {
-          private$base_dt <- snap$base_dt
-          private$nodes   <- snap$nodes
-          private$schemas <- snap$schemas
+        # Verify the supplied data matches the cached base table via a
+        # full content hash. Cheap (sub-second on millions of rows) and
+        # catches silent data updates that would otherwise produce
+        # wrong results from stale cached state.
+        cache_match <- TRUE
+        dt_hash <- NULL
+        if (!is.null(dt)) {
+          dt_hash <- digest::digest(dt)
+          cache_match <- identical(dt_hash, snap$base_dt_hash)
+        }
+        if (cache_match) {
+          private$base_dt      <- snap$base_dt
+          private$base_dt_hash <- snap$base_dt_hash
+          private$nodes        <- snap$nodes
+          private$schemas      <- snap$schemas
           for (nm in names(private$nodes)) {
             private$nodes[[nm]]$replay_cursor <-
               private$nodes[[nm]]$branched_at_log_len
@@ -179,9 +178,16 @@ CohortPipeline <- R6::R6Class(
           if (!is.null(label) && "root" %in% names(private$nodes)) {
             private$nodes$root$label <- label
           }
+        } else {
+          warning("CohortPipeline: supplied 'dt' content does not match ",
+            "the cached base table (digest mismatch); discarding cache ",
+            "and rebuilding from scratch.")
+          private$install_base(dt, label = label %||% "Cohort participants")
+          private$base_dt_hash <- dt_hash
         }
       } else if (!is.null(dt)) {
         private$install_base(dt, label = label %||% "Cohort participants")
+        private$base_dt_hash <- digest::digest(dt)
       }
     },
 
@@ -819,6 +825,7 @@ CohortPipeline <- R6::R6Class(
       saveRDS(list(
         cache_version = .COHORT_CACHE_VERSION,
         base_dt       = private$base_dt,
+        base_dt_hash  = private$base_dt_hash,
         nodes         = private$nodes,
         schemas       = private$schemas
       ), file = path)
@@ -865,6 +872,7 @@ CohortPipeline <- R6::R6Class(
     schemas        = NULL,
     auto_validate  = FALSE,
     cache_file     = NULL,
+    base_dt_hash   = NULL,
 
     # Install dt as the shared base table and create the root cohort.
     # Called from the constructor; not part of the public API.
@@ -1006,7 +1014,7 @@ CohortPipeline <- R6::R6Class(
 
 # Cache schema version. Bump on any incompatible change to the
 # serialised structure (new fields, renamed fields, etc.).
-.COHORT_CACHE_VERSION <- 1L
+.COHORT_CACHE_VERSION <- 2L
 
 # Local %||%; not exported. (R 4.4 introduced this in base; we keep our
 # own copy for portability with the declared R >= 3.5.0.)

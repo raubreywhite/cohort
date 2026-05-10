@@ -590,18 +590,14 @@ CohortPipeline <- R6::R6Class(
     #' @description
     #' Plot a CONSORT diagram of the cohort tree.
     #'
-    #' With no arguments, plots one panel per **frozen** cohort (a cohort
-    #' that has been branched from or has an artifact attached — see the
-    #' freeze rule in the class description). If no cohorts are frozen
-    #' yet, falls back to plotting every cohort. Each panel walks the
-    #' root-to-cohort path automatically and uses cohort names as box
-    #' labels. With one or more cohort names, plots only those.
+    #' With no arguments, plots one panel per cohort. Each panel walks
+    #' the root-to-cohort path automatically and uses cohort names as
+    #' box labels. With one or more cohort names, plots only those.
     #'
     #' This is the default convenience entry point. Use
     #' `$draw_consort_panels()` for custom labels or layouts.
     #' @param cohorts Optional character vector of cohort names. If
-    #'   omitted, every frozen cohort is plotted (or every cohort if
-    #'   none are frozen).
+    #'   omitted, every cohort is plotted.
     #' @param file Optional `.pdf`/`.png` path. If supplied, the plot is
     #'   written to that file. Otherwise it is drawn on the active device.
     #' @param ncol,width,height,text_width,title_fontsize Optional layout
@@ -615,10 +611,7 @@ CohortPipeline <- R6::R6Class(
           call. = FALSE)
       }
       if (is.null(cohorts)) {
-        cohorts <- private$frozen_cohorts()
-        if (length(cohorts) == 0L) {
-          cohorts <- names(private$nodes)
-        }
+        cohorts <- names(private$nodes)
       } else {
         unknown <- setdiff(cohorts, names(private$nodes))
         if (length(unknown) > 0L) {
@@ -699,13 +692,6 @@ CohortPipeline <- R6::R6Class(
       }, character(1L))
       has_child <- names(private$nodes) %in% parents
       names(private$nodes)[!has_child]
-    },
-
-    # Names of frozen cohorts (children or artifacts attached).
-    frozen_cohorts = function() {
-      is_frozen <- vapply(private$nodes, function(n) isTRUE(n$frozen),
-        logical(1L))
-      names(private$nodes)[is_frozen]
     },
 
     # Build the panels list for $plot(). One panel per cohort, walking

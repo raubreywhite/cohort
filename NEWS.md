@@ -38,5 +38,6 @@ Multi-way forks are unaffected.
 - `$get_everyone()` reconstructs a per-branch full view (rows + a
   `.cohort_status` column) so the returned object is meaningful for any
   branch in the tree.
-- `$plot()` defaults to plotting every frozen cohort, falling back to
-  every cohort when none are frozen yet.
+- `$plot()` defaults to plotting every cohort regardless of freeze
+  state, so unfrozen leaf cohorts (the typical analytic endpoint) are
+  always shown.

@@ -175,8 +175,8 @@ site (every `$new_cohort()` and `$set_artifact()` call validates after).
 ## CONSORT diagrams
 
 The simplest way to draw CONSORT diagrams is `$plot()`. With no
-arguments it auto-discovers every frozen cohort and renders one panel
-per root-to-cohort path; cohort names become box labels.
+arguments it renders one panel per cohort, walking the root-to-cohort
+path; cohort names become box labels.
 
 ```{r consort, fig.width = 7, fig.height = 6, fig.align = "center", out.width = "85%"}
 cp$plot()
@@ -184,7 +184,7 @@ cp$plot()
 
 You can name specific cohorts:
 
-```r
+```{r, fig.width = 7, fig.height = 6, fig.align = "center", out.width = "85%"}
 cp$plot(c("adults_female", "adults_grp_a"))
 ```
 

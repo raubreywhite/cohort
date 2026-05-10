@@ -563,12 +563,9 @@ A list of grobs (invisibly).
 \subsection{Method \code{plot()}}{
 Plot a CONSORT diagram of the cohort tree.
 
-With no arguments, plots one panel per \strong{frozen} cohort (a cohort
-that has been branched from or has an artifact attached — see the
-freeze rule in the class description). If no cohorts are frozen
-yet, falls back to plotting every cohort. Each panel walks the
-root-to-cohort path automatically and uses cohort names as box
-labels. With one or more cohort names, plots only those.
+With no arguments, plots one panel per cohort. Each panel walks
+the root-to-cohort path automatically and uses cohort names as
+box labels. With one or more cohort names, plots only those.
 
 This is the default convenience entry point. Use
 \verb{$draw_consort_panels()} for custom labels or layouts.
@@ -588,8 +585,7 @@ This is the default convenience entry point. Use
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{cohorts}}{Optional character vector of cohort names. If
-omitted, every frozen cohort is plotted (or every cohort if
-none are frozen).}
+omitted, every cohort is plotted.}
 
 \item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If supplied, the plot is
 written to that file. Otherwise it is drawn on the active device.}

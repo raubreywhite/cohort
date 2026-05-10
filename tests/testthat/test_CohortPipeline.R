@@ -218,16 +218,15 @@ test_that("predicate length mismatch is reported clearly", {
   )
 })
 
-test_that("plot() defaults to frozen cohorts and falls back to all", {
+test_that("plot() defaults to every cohort regardless of freeze state", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
 
-  # No frozen cohorts yet -- falls back to plotting every cohort.
   pdf(file = tempfile(fileext = ".pdf"))
   expect_silent(cp$plot())
   dev.off()
 
-  # Once a fork happens, root is frozen; default plot draws frozen ones.
+  # Adding an unfrozen leaf cohort -- it must still be included.
   cp$new_cohort("child", from = "root")
   pdf(file = tempfile(fileext = ".pdf"))
   expect_silent(cp$plot())

@@ -63,8 +63,8 @@
 </ul></div>
 <div class="section level3">
 <h3 id="cache-integrity-2026-5-10">Cache integrity<a class="anchor" aria-label="anchor" href="#cache-integrity-2026-5-10"></a></h3>
-<ul><li>The cache now stores a <code><a href="https://eddelbuettel.github.io/digest/man/digest.html" class="external-link">digest::digest()</a></code> hash of the base table alongside the operation log. On warm load with a supplied <code>dt</code>, the hash is recomputed and compared; a mismatch warns loudly and rebuilds from scratch. Catches silent data updates that would otherwise produce wrong results from stale cached state. Adds <code>digest</code> to <code>Imports</code>.</li>
-<li>Cache schema version bumped to 2.</li>
+<ul><li>The cache now stores a <code>digest::digest(dt, algo = "spookyhash")</code> hash of the base table alongside the operation log. On warm load with a supplied <code>dt</code>, the hash is recomputed and compared; a mismatch warns loudly and rebuilds from scratch. Catches silent data updates that would otherwise produce wrong results from stale cached state. Adds <code>digest</code> to <code>Imports</code>.</li>
+<li>Cache schema version bumped to 3.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="incremental-caching-new-2026-5-10">Incremental caching (new)<a class="anchor" aria-label="anchor" href="#incremental-caching-new-2026-5-10"></a></h3>

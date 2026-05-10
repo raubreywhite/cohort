@@ -1,0 +1,619 @@
+#' R6 Class for Cohort Construction with Provenance
+#'
+#' @description
+#' `CohortPipeline` builds analytic cohorts as a tree of named branches with
+#' full exclusion provenance. Each branch derives from a parent branch by
+#' applying a sequence of named exclusion rules. Every exclusion is
+#' recorded -- its reason, the predicate that produced it, the number of
+#' subjects affected -- so the resulting object can drive a CONSORT diagram
+#' and serve as the auditable record of how the analytic dataset was
+#' constructed.
+#'
+#' The class is designed to feed analytic data tables into downstream
+#' orchestration packages such as 'plnr'. Cohort construction is kept
+#' strictly upstream of analysis. See `vignette("cohort", package = "cohort")`
+#' for a worked example.
+#'
+#' @section Storage strategy:
+#' A `CohortPipeline` stores a single shared base data table and, for each
+#' branch, a small per-row integer status vector identifying which rows are
+#' included and which step excluded them. Branching is therefore O(n) in
+#' the number of rows of the base table and never copies the data values,
+#' so deep cohort trees stay flat in memory.
+#'
+#' @section Mutation contract:
+#' - `$load(dt)` makes a defensive copy of `dt` once. The user's data table
+#'   is never modified.
+#' - `$get_included(cohort)` defaults to returning an independent copy.
+#'   With `copy = FALSE` it returns a row-subset view of the shared base
+#'   table that callers must treat as read-only.
+#' - The data table passed to a `$set_artifact()` callback is always an
+#'   independent copy. Callbacks may mutate it freely.
+#' - `$get_everyone(cohort)` returns an independent copy with a
+#'   `.cohort_status` column reconstructed from the branch's status
+#'   vector.
+#'
+#' @section Public API:
+#' - `$load(dt)` -- install the shared base table as the root cohort.
+#' - `$new_cohort(name, from)` -- branch from an existing cohort.
+#' - `$exclude_and_track(branch, reason, expr_str)` -- apply a string-form
+#'   predicate and log the exclusion.
+#' - `$set_artifact(name, from, fn)` -- cache a derived object on a cohort.
+#' - `$get_included(cohort, copy = TRUE)` -- included rows of a cohort.
+#' - `$get_everyone(cohort)` -- full-cohort view with a reconstructed
+#'   `.cohort_status` column.
+#' - `$get_artifact(cohort, name)` -- retrieve a cached artifact.
+#' - `$n_included(cohort)`, `$n_total()` -- row counts.
+#' - `$list_cohorts()`, `$list_artifacts(cohort)`, `$list_schemas()`
+#' - `$declare_schema(branch, schema, from)`, `$validate()` -- column
+#'   contracts.
+#' - `$consort()` -- long-form exclusion log across all branches.
+#' - `$draw_consort_panels(panels, file)` -- render CONSORT diagrams via the
+#'   `consort` package.
+#' - `$print()` -- concise text summary of the cohort tree.
+#'
+#' @section Predicate strings:
+#' Exclusion predicates are passed as strings (`expr_str`) and parsed with
+#' `parse(text = expr_str)`. The string is evaluated against the included
+#' subset of the base table, so predicates may safely assume that earlier
+#' exclusions have already removed invalid rows. `NA` predicate results
+#' are treated as `FALSE` (rows are kept). The original string is stored
+#' verbatim in the exclusion log, which keeps cohort definitions
+#' serializable and auditable.
+#'
+#' @examples
+#' if (requireNamespace("data.table", quietly = TRUE)) {
+#'   library(data.table)
+#'   d <- data.table(
+#'     id  = 1:10,
+#'     age = c(17, 22, 35, NA, 41, 28, 19, 16, 67, 50),
+#'     sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
+#'   )
+#'
+#'   cp <- CohortPipeline$new()
+#'   cp$load(d)
+#'
+#'   # Root-level exclusions on the shared base
+#'   cp$exclude_and_track("root", "Missing sex",     "is.na(sex)")
+#'   cp$exclude_and_track("root", "Missing age",     "is.na(age)")
+#'   cp$exclude_and_track("root", "Under 18",        "age < 18")
+#'
+#'   # Branch into an "adults_female" cohort
+#'   cp$new_cohort("adults_female", from = "root")
+#'   cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
+#'
+#'   # Cache a derived artifact on the cohort
+#'   cp$set_artifact("mean_age", from = "adults_female",
+#'     fn = function(dt, sib) mean(dt$age))
+#'
+#'   cp$list_cohorts()
+#'   cp$consort()
+#'   cp$get_artifact("adults_female", "mean_age")
+#' }
+#'
+#' @import data.table
+#' @import R6
+#' @export
+CohortPipeline <- R6::R6Class(
+  "CohortPipeline",
+  cloneable = FALSE,
+  public = list(
+
+    #' @description
+    #' Create a new (empty or seeded) `CohortPipeline`.
+    #' @param dt Optional `data.table` to install as the root cohort. If
+    #'   `NULL` (the default), the pipeline starts empty and the user
+    #'   should call `$load()` before any other method.
+    #' @param auto_validate Logical. When `TRUE`, `$validate()` is invoked
+    #'   automatically after every `$new_cohort()` and `$set_artifact()`
+    #'   call so schema mismatches stop at the failure site rather than
+    #'   accumulating until the next manual `$validate()`. Defaults to
+    #'   `FALSE`.
+    #' @return A new `CohortPipeline` instance.
+    initialize = function(dt = NULL, auto_validate = FALSE) {
+      private$schemas <- list()
+      private$nodes <- list()
+      private$auto_validate <- isTRUE(auto_validate)
+      if (!is.null(dt)) self$load(dt)
+    },
+
+    #' @description
+    #' Install a `data.table` as the shared base table and create a root
+    #' cohort named `"root"`. The user's table is copied once; subsequent
+    #' modifications to the user's `dt` do not affect the pipeline.
+    #' @param dt A `data.table` containing one row per subject.
+    #' @return The pipeline (invisibly), for chaining.
+    load = function(dt) {
+      stopifnot(is.data.table(dt))
+      private$base_dt <- data.table::copy(dt)
+      n <- nrow(private$base_dt)
+      private$nodes <- list(
+        root = list(
+          parent              = NA_character_,
+          status              = integer(n),                      # all 0L (included)
+          log_entries         = list(),
+          branched_at_log_len = 0L,
+          branched_at_n       = n,
+          artifacts           = list()
+        )
+      )
+      invisible(self)
+    },
+
+    #' @description
+    #' Declare a column-type / level / NA contract for a branch. Validation
+    #' runs only when `$validate()` is called (or automatically when the
+    #' pipeline was constructed with `auto_validate = TRUE`).
+    #' @param branch Character. Branch name to attach the schema to.
+    #' @param schema Named list. Each element describes one column with
+    #'   fields:
+    #'   - `type`: one of `"integer"`, `"numeric"`, `"factor"`, `"logical"`,
+    #'     `"Date"`, `"character"`.
+    #'   - `levels` (factor only): expected `levels()` vector.
+    #'   - `na`: if `FALSE`, the column must contain no `NA`s.
+    #' @param from Optional character. If supplied, the new schema starts
+    #'   as a copy of the schema attached to `from` and the entries in
+    #'   `schema` are merged on top.
+    #' @return The pipeline (invisibly).
+    declare_schema = function(branch, schema = NULL, from = NULL) {
+      if (!is.null(from)) {
+        if (!from %in% names(private$schemas)) {
+          stop("declare_schema: unknown 'from' branch: ", from, call. = FALSE)
+        }
+        base <- private$schemas[[from]]
+        if (!is.null(schema)) {
+          for (nm in names(schema)) base[[nm]] <- schema[[nm]]
+        }
+        private$schemas[[branch]] <- base
+      } else {
+        if (is.null(schema)) {
+          stop("declare_schema: 'schema' must be supplied when 'from' is NULL.",
+            call. = FALSE)
+        }
+        private$schemas[[branch]] <- schema
+      }
+      invisible(self)
+    },
+
+    #' @description
+    #' Validate every declared schema against the included rows of its
+    #' branch. Throws an error listing every mismatch found.
+    #' @return The pipeline (invisibly), if validation passes.
+    validate = function() {
+      errors <- character()
+      for (branch in names(private$schemas)) {
+        schema <- private$schemas[[branch]]
+        if (!branch %in% names(private$nodes)) {
+          errors <- c(errors, sprintf("[%s] Branch not found", branch))
+          next
+        }
+        dt <- self$get_included(branch, copy = FALSE)
+        for (col_name in names(schema)) {
+          spec <- schema[[col_name]]
+          if (!col_name %in% names(dt)) {
+            errors <- c(errors,
+              sprintf("[%s] Missing column: %s", branch, col_name))
+            next
+          }
+          col <- dt[[col_name]]
+          ok <- switch(spec$type,
+            "integer"   = is.integer(col),
+            "numeric"   = is.numeric(col),
+            "factor"    = is.factor(col),
+            "logical"   = is.logical(col),
+            "Date"      = inherits(col, "Date"),
+            "character" = is.character(col),
+            TRUE
+          )
+          if (!ok) {
+            errors <- c(errors, sprintf("[%s] %s: expected %s, got %s",
+              branch, col_name, spec$type, class(col)[1]))
+          }
+          if (identical(spec$type, "factor") && !is.null(spec$levels) &&
+              !identical(levels(col), spec$levels)) {
+            errors <- c(errors,
+              sprintf("[%s] %s: factor levels mismatch", branch, col_name))
+          }
+          if (isFALSE(spec$na) && anyNA(col)) {
+            errors <- c(errors,
+              sprintf("[%s] %s: unexpected NAs (%d)",
+                branch, col_name, sum(is.na(col))))
+          }
+        }
+      }
+      if (length(errors) > 0L) {
+        stop("CohortPipeline validation failed:\n  ",
+          paste(errors, collapse = "\n  "), call. = FALSE)
+      }
+      message("[validate] All CohortPipeline schemas passed")
+      invisible(self)
+    },
+
+    #' @description
+    #' Tabulate the names and column counts of all declared schemas.
+    #' @return A `data.table` with columns `branch` and `n_cols`.
+    list_schemas = function() {
+      data.table::rbindlist(lapply(names(private$schemas), function(nm) {
+        data.table::data.table(branch = nm, n_cols = length(private$schemas[[nm]]))
+      }))
+    },
+
+    #' @description
+    #' Return the raw schema list for inspection.
+    #' @return A named list of schemas.
+    get_schemas = function() private$schemas,
+
+    #' @description
+    #' Create a new cohort branched from an existing cohort. The new
+    #' cohort starts identical to its parent at the moment of branching;
+    #' subsequent exclusions in the parent do not propagate to the child.
+    #' @param name Character. Name of the new cohort.
+    #' @param from Character. Name of the parent cohort.
+    #' @return The pipeline (invisibly).
+    new_cohort = function(name, from) {
+      if (!from %in% names(private$nodes)) {
+        stop("new_cohort: unknown parent '", from, "'.", call. = FALSE)
+      }
+      if (name %in% names(private$nodes)) {
+        stop("new_cohort: cohort '", name, "' already exists.", call. = FALSE)
+      }
+      parent_node <- private$nodes[[from]]
+      private$nodes[[name]] <- list(
+        parent              = from,
+        status              = parent_node$status,
+        log_entries         = parent_node$log_entries,
+        branched_at_log_len = length(parent_node$log_entries),
+        branched_at_n       = sum(parent_node$status == 0L),
+        artifacts           = list()
+      )
+      if (private$auto_validate) self$validate()
+      invisible(self)
+    },
+
+    #' @description
+    #' Apply an exclusion predicate to a cohort and record the result on
+    #' the exclusion log. The predicate is evaluated against the included
+    #' subset of the base table; rows for which the predicate evaluates
+    #' to `TRUE` are excluded with the supplied reason. `NA` predicate
+    #' results are treated as `FALSE`.
+    #' @param branch Character. Cohort to apply the exclusion to.
+    #' @param reason Character. Human-readable reason recorded on the log.
+    #' @param expr_str Character. R expression as a string (parsed with
+    #'   `parse(text = ...)`). For example `"is.na(age) | age < 18"`.
+    #' @return The pipeline (invisibly).
+    exclude_and_track = function(branch, reason, expr_str) {
+      if (!branch %in% names(private$nodes)) {
+        stop("exclude_and_track: unknown branch '", branch, "'.", call. = FALSE)
+      }
+      if (!is.character(expr_str) || length(expr_str) != 1L) {
+        stop("exclude_and_track: 'expr_str' must be a single character string.",
+          call. = FALSE)
+      }
+      node <- private$nodes[[branch]]
+      step_num <- length(node$log_entries) + 1L
+      included_idx <- which(node$status == 0L)
+
+      if (length(included_idx) == 0L) {
+        node$log_entries[[step_num]] <- list(
+          step        = step_num,
+          reason      = reason,
+          expr_str    = expr_str,
+          n_excluded  = 0L,
+          n_remaining = 0L
+        )
+        private$nodes[[branch]] <- node
+        return(invisible(self))
+      }
+
+      expr_parsed <- parse(text = expr_str)[[1L]]
+      mask <- tryCatch(
+        private$base_dt[included_idx, eval(expr_parsed)],
+        error = function(e) {
+          stop(sprintf("exclude_and_track '%s': %s", reason, e$message),
+            call. = FALSE)
+        }
+      )
+      if (length(mask) != length(included_idx)) {
+        stop(sprintf(
+          "exclude_and_track '%s': predicate returned length %d, expected %d.",
+          reason, length(mask), length(included_idx)), call. = FALSE)
+      }
+      mask[is.na(mask)] <- FALSE
+      exclude_idx <- included_idx[as.logical(mask)]
+      if (length(exclude_idx) > 0L) {
+        node$status[exclude_idx] <- step_num
+      }
+      n_remaining <- sum(node$status == 0L)
+      node$log_entries[[step_num]] <- list(
+        step        = step_num,
+        reason      = reason,
+        expr_str    = expr_str,
+        n_excluded  = length(exclude_idx),
+        n_remaining = n_remaining
+      )
+      private$nodes[[branch]] <- node
+      invisible(self)
+    },
+
+    #' @description
+    #' Compute and cache a derived artifact on a cohort. The supplied
+    #' function is called with two arguments: an independent copy of the
+    #' included rows, and the named list of artifacts already attached to
+    #' that cohort.
+    #' @param name Character. Artifact name (must be unique on the cohort).
+    #' @param from Character. Cohort to attach the artifact to.
+    #' @param fn Function with signature `function(dt, siblings)`. The
+    #'   return value becomes the artifact.
+    #' @return The pipeline (invisibly).
+    set_artifact = function(name, from, fn) {
+      if (!is.function(fn)) {
+        stop("set_artifact: 'fn' must be a function.", call. = FALSE)
+      }
+      if (!from %in% names(private$nodes)) {
+        stop("set_artifact: unknown cohort '", from, "'.", call. = FALSE)
+      }
+      node <- private$nodes[[from]]
+      if (name %in% names(node$artifacts)) {
+        stop("set_artifact: artifact '", name, "' already exists on cohort '",
+          from, "'.", call. = FALSE)
+      }
+      result <- fn(self$get_included(from, copy = TRUE), node$artifacts)
+      node$artifacts[[name]] <- result
+      private$nodes[[from]] <- node
+      if (private$auto_validate) self$validate()
+      invisible(self)
+    },
+
+    #' @description
+    #' Return the included rows of a cohort.
+    #' @param cohort Character. Cohort name.
+    #' @param copy Logical. If `TRUE` (the default), an independent copy
+    #'   is returned and the caller may mutate it freely. If `FALSE`, a
+    #'   row-subset of the shared base table is returned; the caller must
+    #'   treat the result as read-only because mutating it can corrupt
+    #'   the base.
+    #' @return A `data.table`.
+    get_included = function(cohort, copy = TRUE) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("get_included: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      node <- private$nodes[[cohort]]
+      idx <- which(node$status == 0L)
+      out <- private$base_dt[idx]
+      if (isTRUE(copy)) out <- data.table::copy(out)
+      out
+    },
+
+    #' @description
+    #' Return a copy of the full base table with a `.cohort_status` column
+    #' reconstructed from this branch's exclusion history. Included rows
+    #' are labeled `"included"`; excluded rows carry the reason of the
+    #' first exclusion that caught them.
+    #' @param cohort Character. Cohort name.
+    #' @return A `data.table` of the same height as the base table, with
+    #'   one extra column `.cohort_status`.
+    get_everyone = function(cohort) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("get_everyone: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      node <- private$nodes[[cohort]]
+      reasons <- if (length(node$log_entries) == 0L) {
+        character()
+      } else {
+        vapply(node$log_entries, function(e) e$reason, character(1L))
+      }
+      status_chr <- ifelse(node$status == 0L,
+        "included",
+        reasons[node$status])
+      out <- data.table::copy(private$base_dt)
+      out[, .cohort_status := status_chr]
+      out
+    },
+
+    #' @description
+    #' Retrieve a cached artifact from a cohort.
+    #' @param cohort Character. Cohort name.
+    #' @param name Character. Artifact name.
+    #' @return The cached artifact (any type).
+    get_artifact = function(cohort, name) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("get_artifact: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      node <- private$nodes[[cohort]]
+      if (!name %in% names(node$artifacts)) {
+        stop("get_artifact: unknown artifact '", name, "' on cohort '",
+          cohort, "'. Available: ",
+          paste(names(node$artifacts), collapse = ", "),
+          call. = FALSE)
+      }
+      node$artifacts[[name]]
+    },
+
+    #' @description
+    #' Number of included rows in a cohort.
+    #' @param cohort Character. Cohort name.
+    #' @return Integer.
+    n_included = function(cohort) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("n_included: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      sum(private$nodes[[cohort]]$status == 0L)
+    },
+
+    #' @description
+    #' Total number of rows in the shared base table.
+    #' @return Integer.
+    n_total = function() {
+      if (is.null(private$base_dt)) 0L else nrow(private$base_dt)
+    },
+
+    #' @description
+    #' Tabulate every cohort with its parent, sizes and number of own
+    #' exclusion steps and artifacts.
+    #' @return A `data.table` with one row per cohort.
+    list_cohorts = function() {
+      n_total <- self$n_total()
+      data.table::rbindlist(lapply(names(private$nodes), function(nm) {
+        node <- private$nodes[[nm]]
+        n_inc <- sum(node$status == 0L)
+        own_n_steps <- length(node$log_entries) - node$branched_at_log_len
+        data.table::data.table(
+          name           = nm,
+          parent         = node$parent,
+          n_total        = n_total,
+          n_included     = n_inc,
+          n_excluded     = n_total - n_inc,
+          n_own_steps    = own_n_steps,
+          n_artifacts    = length(node$artifacts)
+        )
+      }))
+    },
+
+    #' @description
+    #' Names of cached artifacts attached to a cohort.
+    #' @param cohort Character. Cohort name.
+    #' @return Character vector.
+    list_artifacts = function(cohort) {
+      if (!cohort %in% names(private$nodes)) {
+        stop("list_artifacts: unknown cohort '", cohort, "'.", call. = FALSE)
+      }
+      names(private$nodes[[cohort]]$artifacts)
+    },
+
+    #' @description
+    #' Long-form table of exclusion log entries across all cohorts.
+    #' Each cohort contributes only its own exclusion steps (steps
+    #' inherited from the parent at branch time are reported under the
+    #' parent, not duplicated).
+    #' @return A `data.table` with columns `branch`, `parent`, `step`,
+    #'   `reason`, `expr_str`, `n_excluded`, `n_remaining`.
+    consort = function() {
+      logs <- list()
+      for (nm in names(private$nodes)) {
+        node <- private$nodes[[nm]]
+        own_idx <- seq_len(length(node$log_entries))[
+          seq_along(node$log_entries) > node$branched_at_log_len
+        ]
+        if (length(own_idx) == 0L) next
+        own_entries <- lapply(node$log_entries[own_idx], function(e) {
+          data.table::data.table(
+            step        = e$step,
+            reason      = e$reason,
+            expr_str    = e$expr_str %||% NA_character_,
+            n_excluded  = e$n_excluded,
+            n_remaining = e$n_remaining
+          )
+        })
+        log <- data.table::rbindlist(own_entries)
+        log[, branch := nm]
+        log[, parent := node$parent]
+        logs[[nm]] <- log
+      }
+      if (length(logs) == 0L) {
+        return(data.table::data.table(
+          branch      = character(),
+          parent      = character(),
+          step        = integer(),
+          reason      = character(),
+          expr_str    = character(),
+          n_excluded  = integer(),
+          n_remaining = integer()
+        ))
+      }
+      out <- data.table::rbindlist(logs)
+      data.table::setcolorder(out, c("branch", "parent", "step",
+        "reason", "expr_str", "n_excluded", "n_remaining"))
+      out
+    },
+
+    #' @description
+    #' Render one or more CONSORT panels for cohort flows. Each panel
+    #' walks a sequence of cohort names, lumping the named cohorts'
+    #' exclusion steps into bullet blocks.
+    #' @param panels A named list. Each element is either a character
+    #'   vector of cohort names (interpreted as the panel's main flow)
+    #'   or a list with components `flow` (character) and optional
+    #'   `side_branches` (named character of identity-only branches that
+    #'   merge into the spine).
+    #' @param file Optional character path. If supplied, the rendered
+    #'   plot is written to a `.pdf` or `.png` file. Otherwise the
+    #'   plot is drawn on the active device.
+    #' @param ncol Optional integer. Number of panels per row.
+    #' @param width,height Optional numeric (inches). File dimensions.
+    #' @param text_width Integer. Wrap width for box text.
+    #' @param title_fontsize Numeric. Title fontsize for each panel.
+    #' @return A list of grobs (invisibly).
+    draw_consort_panels = function(panels, file = NULL, ncol = NULL,
+                                   width = NULL, height = NULL,
+                                   text_width = 40, title_fontsize = 14) {
+      .draw_consort_panels_impl(
+        panels         = panels,
+        nodes          = private$nodes,
+        file           = file,
+        ncol           = ncol,
+        width          = width,
+        height         = height,
+        text_width     = text_width,
+        title_fontsize = title_fontsize
+      )
+    },
+
+    #' @description
+    #' Concise text summary of the cohort tree, exclusion counts, and
+    #' attached artifacts.
+    #' @param ... Unused.
+    #' @return The pipeline (invisibly).
+    print = function(...) {
+      cat("<CohortPipeline>\n")
+      if (length(private$nodes) == 0L) {
+        cat("  (empty -- call $load(dt) to install a base table)\n")
+        return(invisible(self))
+      }
+      n_total <- self$n_total()
+      for (nm in names(private$nodes)) {
+        node <- private$nodes[[nm]]
+        indent <- if (is.na(node$parent)) "" else "  "
+        n_inc <- sum(node$status == 0L)
+        own_n_steps <- length(node$log_entries) - node$branched_at_log_len
+        if (is.na(node$parent)) {
+          cat(sprintf(
+            "%s%s: loaded = %s, included = %s, excluded = %s, %d exclusion step(s)\n",
+            indent, nm,
+            format(n_total, big.mark = ","),
+            format(n_inc, big.mark = ","),
+            format(n_total - n_inc, big.mark = ","),
+            own_n_steps
+          ))
+        } else {
+          n_own_excluded <- node$branched_at_n - n_inc
+          cat(sprintf(
+            "%s%s: branched from %s at n = %s, own excluded = %s, included = %s, %d own step(s)\n",
+            indent, nm, node$parent,
+            format(node$branched_at_n, big.mark = ","),
+            format(n_own_excluded, big.mark = ","),
+            format(n_inc, big.mark = ","),
+            own_n_steps
+          ))
+        }
+        for (art in names(node$artifacts)) {
+          cat(sprintf("%s  $ %s\n", indent, art))
+        }
+      }
+      invisible(self)
+    }
+  ),
+  private = list(
+    base_dt        = NULL,
+    nodes          = NULL,
+    schemas        = NULL,
+    auto_validate  = FALSE,
+
+    # Read-only access to the shared base table for plotting helpers.
+    get_base_dt = function() private$base_dt,
+    get_nodes   = function() private$nodes
+  )
+)
+
+# Local %||%; not exported. (R 4.4 introduced this in base; we keep our
+# own copy for portability with the declared R >= 3.5.0.)
+`%||%` <- function(a, b) if (is.null(a)) b else a

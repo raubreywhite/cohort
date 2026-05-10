@@ -1,0 +1,199 @@
+---
+title: "Cohort construction with provenance"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Cohort construction with provenance}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`cohort` provides the `CohortPipeline` R6 class for building analytic
+cohorts with full provenance. Cohort construction is kept strictly upstream
+of analysis: the pipeline produces analytic data tables, then hands them
+off — typically into a `plnr::Plan`.
+
+## A worked example
+
+We start with a small simulated dataset.
+
+```{r}
+library(cohort)
+library(data.table)
+
+set.seed(1)
+d <- data.table(
+  id  = 1:200,
+  age = sample(c(NA, 16:80), 200, replace = TRUE),
+  sex = sample(c("F", "M", NA), 200, replace = TRUE,
+               prob = c(0.48, 0.48, 0.04)),
+  grp = sample(c("a", "b"), 200, replace = TRUE)
+)
+```
+
+### Step 1: install a base table
+
+```{r}
+cp <- CohortPipeline$new()
+cp$load(d)
+```
+
+`CohortPipeline$new()` makes a defensive copy of `d` once. The user's
+data table is never mutated, no matter what subsequent operations you
+run on the pipeline.
+
+### Step 2: apply root-level exclusions
+
+Every exclusion takes a human-readable reason and an R expression as a
+string. The string is parsed and evaluated against the rows currently
+included on the branch.
+
+```{r}
+cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
+cp$exclude_and_track("root", "Missing age", "is.na(age)")
+cp$exclude_and_track("root", "Under 18",    "age < 18")
+```
+
+`NA` predicate results are treated as `FALSE` (rows are kept) so you
+can write predicates without defensive `!is.na(...)` clauses for every
+column.
+
+### Step 3: branch into sub-cohorts
+
+```{r}
+cp$new_cohort("adults_female", from = "root")
+cp$exclude_and_track("adults_female", "Not female", "sex != 'F'")
+
+cp$new_cohort("adults_grp_a", from = "root")
+cp$exclude_and_track("adults_grp_a", "Group not a", "grp != 'a'")
+```
+
+A branch starts identical to its parent at the moment of branching.
+Subsequent exclusions on the parent never propagate to a child; sibling
+branches evolve independently.
+
+### Step 4: derive cached artifacts
+
+`set_artifact()` is for reusable per-cohort objects (analytic-ready data
+tables, summary statistics, baseline tables). Each callback receives a
+copy of the included rows and the named list of artifacts already
+attached to the cohort.
+
+```{r}
+cp$set_artifact("dt_for_analysis",
+  from = "adults_female",
+  fn = function(dt, sib) {
+    dt[, age_group := cut(age,
+      breaks = c(18, 30, 50, Inf),
+      right = FALSE,
+      labels = c("18-29", "30-49", "50+"))]
+    dt
+  }
+)
+```
+
+Each `set_artifact()` callback receives a *fresh* copy of the cohort's
+included rows — it does not see modifications made by previous
+artifacts. To chain derivations, read the previous artifact off the
+`sib` argument:
+
+```{r}
+cp$set_artifact("baseline_table",
+  from = "adults_female",
+  fn = function(dt, sib) {
+    sib$dt_for_analysis[, .(.N, mean_age = mean(age)),
+      by = age_group][order(age_group)]
+  }
+)
+```
+
+### Step 5: inspect the cohort tree
+
+```{r}
+print(cp)
+cp$list_cohorts()
+cp$consort()
+```
+
+`$consort()` returns a long-form table — one row per exclusion step,
+across every branch. Each branch contributes only its own steps; steps
+inherited from a parent at branch time are reported under the parent.
+
+### Step 6: hand off to plnr
+
+The bulk-ingest helper `add_data_from_cohort()` registers a cohort's
+artifacts on a `plnr::Plan` as named data entries. Each entry is named
+`paste0(prefix, cohort, "__", artifact)`.
+
+```{r, eval = requireNamespace("plnr", quietly = TRUE)}
+plan <- plnr::Plan$new()
+add_data_from_cohort(plan, cp, cohort = "adults_female")
+plan$get_data()
+```
+
+You can now `add_argset()` and `add_analysis()` on the plan as usual.
+
+## Schemas
+
+Use schemas to declare a column-type contract on a branch and verify it
+before downstream code consumes the data.
+
+```{r}
+cp$declare_schema("adults_female", schema = list(
+  age = list(type = "numeric",   na = FALSE),
+  sex = list(type = "character", na = FALSE)
+))
+cp$validate()
+```
+
+If a column is missing, has the wrong type, or carries unexpected `NA`s,
+`$validate()` throws a single error listing every problem. Pass
+`auto_validate = TRUE` to `CohortPipeline$new()` to fail at the failure
+site (every `$new_cohort()` and `$set_artifact()` call validates after).
+
+## CONSORT diagrams
+
+`$draw_consort_panels()` renders one or more CONSORT panels using the
+`consort` package. Each panel walks a sequence of cohort names; their
+exclusion steps become bullet blocks on the spine.
+
+```r
+cp$draw_consort_panels(
+  panels = list(
+    "Primary analytic chain" = c(
+      "All participants" = "root",
+      "Adult females"    = "adults_female"
+    )
+  ),
+  file = "Figure_1_CONSORT.pdf"
+)
+```
+
+## Mutation contract (summary)
+
+| Method                                | Returns                      | Mutation safe?       |
+|---------------------------------------|------------------------------|----------------------|
+| `$get_included(c)` / `copy = TRUE`    | Independent copy             | Yes                  |
+| `$get_included(c, copy = FALSE)`      | Row-subset of base           | **No** — read-only   |
+| Callback in `$set_artifact`           | Independent copy of subset   | Yes                  |
+| `$get_everyone(c)`                    | Independent copy + status    | Yes                  |
+
+Operations that go through the public API never modify the user's input
+data table or another branch.
+
+## Performance notes
+
+- Branching is O(n) in the number of rows of the base table. The data
+  values themselves are stored once and shared across the tree.
+- `$exclude_and_track()` evaluates the predicate against the included
+  subset only; predicates may safely assume earlier exclusions have
+  already removed invalid rows.
+- The exclusion log is accumulated as a list and materialized as a
+  `data.table` only on read (`$consort()`, `$list_cohorts()`), avoiding
+  quadratic `rbind` growth.

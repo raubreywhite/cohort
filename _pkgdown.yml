@@ -1,0 +1,12 @@
+url: https://www.rwhite.no/cohort/
+
+reference:
+- title: "Cohort Construction"
+  desc: "The CohortPipeline R6 class — the main entry point of the package."
+  contents:
+    - CohortPipeline
+
+- title: "Integration"
+  desc: "Bulk-handoff helpers for downstream orchestration packages."
+  contents:
+    - add_data_from_cohort

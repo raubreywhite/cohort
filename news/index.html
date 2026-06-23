@@ -17,7 +17,7 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="../index.html">cohort</a>
-        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">2026.5.10</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="">2026.6.23</span>
       </span>
     </div>
 
@@ -50,6 +50,16 @@
       <small>Source: <a href="https://github.com/raubreywhite/cohort/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="page-header" data-toc-text="2026.6.23" id="version-2026623">Version 2026.6.23<a class="anchor" aria-label="anchor" href="#version-2026623"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-2026-6-23">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-6-23"></a></h3>
+<ul><li>
+<code>exclude_and_track()</code> now errors when a predicate evaluates to a non-logical result (character, numeric, factor, or a logical matrix) instead of silently coercing it with <code><a href="https://rdrr.io/r/base/logical.html" class="external-link">as.logical()</a></code>. A numeric predicate previously excluded every non-zero row and a character predicate logged a phantom exclusion, corrupting the audit trail. The documented contract – predicates return <code>TRUE</code>/<code>FALSE</code>, <code>NA</code> means keep – is now enforced.</li>
+<li>Warm-cache replay: changing a <strong>non-root</strong> cohort’s later own exclusion no longer retains the stale step. <code>.invalidate_from()</code> treated its cursor as a branch-local count while the caller passed an absolute log index, double-counting the inherited prefix so the truncation under-removed. Root cohorts were unaffected (zero prefix).</li>
+<li>Warm-cache replay: moving <code>$new_cohort()</code> before a parent exclusion (an order that errors on a cold run via the freeze rule) now errors instead of silently reusing the child’s stale post-exclusion snapshot. The parent’s replay position is checked against the child’s branch point; on mismatch you are directed to <code>$invalidate()</code> (or to delete the cache).</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="page-header" data-toc-text="2026.5.10" id="version-2026510">Version 2026.5.10<a class="anchor" aria-label="anchor" href="#version-2026510"></a></h2>
 <p>Initial release.</p>

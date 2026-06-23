@@ -78,7 +78,7 @@ numbers are absolute; some code treats a cursor as branch-local.
 - ✅ NEWS entry + version bump 2026.5.10 → 2026.6.23
 - ✅ Verify output equivalence (unchanged warm replay == cold; suite green)
 - ✅ `devtools::test()` green — `[ FAIL 0 | WARN 0 | SKIP 0 | PASS 79 ]`
-- 🟡 Commit to `main` + push, watch CI  ← in progress
+- ✅ Committed to `main` (443c8f6) + pushed; CI green (R-CMD-check ✓, pkgdown ✓)
 
 ## Teaching thread (resume when you're up for it)
 - F1 fix walkthrough (absolute-cursor rewrite of `.invalidate_from`) — not yet quizzed.

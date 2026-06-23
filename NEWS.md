@@ -1,3 +1,26 @@
+# Version 2026.6.23
+
+## Bug fixes
+
+- `exclude_and_track()` now errors when a predicate evaluates to a
+  non-logical result (character, numeric, factor, or a logical matrix)
+  instead of silently coercing it with `as.logical()`. A numeric
+  predicate previously excluded every non-zero row and a character
+  predicate logged a phantom exclusion, corrupting the audit trail. The
+  documented contract -- predicates return `TRUE`/`FALSE`, `NA` means
+  keep -- is now enforced.
+- Warm-cache replay: changing a **non-root** cohort's later own
+  exclusion no longer retains the stale step. `.invalidate_from()`
+  treated its cursor as a branch-local count while the caller passed an
+  absolute log index, double-counting the inherited prefix so the
+  truncation under-removed. Root cohorts were unaffected (zero prefix).
+- Warm-cache replay: moving `$new_cohort()` before a parent exclusion
+  (an order that errors on a cold run via the freeze rule) now errors
+  instead of silently reusing the child's stale post-exclusion snapshot.
+  The parent's replay position is checked against the child's branch
+  point; on mismatch you are directed to `$invalidate()` (or to delete
+  the cache).
+
 # Version 2026.5.10
 
 Initial release.

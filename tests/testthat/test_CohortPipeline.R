@@ -221,6 +221,25 @@ test_that("predicate length mismatch is reported clearly", {
   )
 })
 
+test_that("exclude_and_track rejects non-logical predicate results", {
+  cp <- CohortPipeline$new(make_test_dt())
+  # Character / numeric / factor results would otherwise be silently coerced
+  # by as.logical(), corrupting the exclusion counts.
+  expect_error(cp$exclude_and_track("root", "char",   "sex"),
+    "must return a logical vector, not character")
+  expect_error(cp$exclude_and_track("root", "num",    "age"),
+    "must return a logical vector, not numeric")
+  expect_error(cp$exclude_and_track("root", "factor", "factor(sex)"),
+    "must return a logical vector, not factor")
+  # A logical *matrix* passes is.logical() but must still be rejected.
+  expect_error(cp$exclude_and_track("root", "matrix", "cbind(age > 18, age > 40)"),
+    "must return a logical vector, not matrix")
+  # The failed calls leave the cohort untouched; a real logical predicate works.
+  expect_equal(cp$n_included("root"), 10L)
+  cp$exclude_and_track("root", "Under 18", "age < 18")
+  expect_equal(cp$n_included("root"), 8L)
+})
+
 test_that("plot() defaults to every cohort regardless of freeze state", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
@@ -380,4 +399,52 @@ test_that("cache_file: dt content change is detected and rebuilds", {
   )
   # After rebuild, root has no log entries (we have not re-issued any).
   expect_equal(nrow(cp2$consort()), 0L)
+})
+
+test_that("cache_file: a non-root cohort changing a later own exclusion drops the stale step", {
+  cache <- tempfile(fileext = ".rds")
+  on.exit(unlink(cache), add = TRUE)
+  d <- data.table(id = 1:6, age = c(10,20,30,40,50,60), grp = c("a","a","b","b","c","c"))
+
+  cp <- CohortPipeline$new(d, cache_file = cache)
+  cp$exclude_and_track("root", "drop age<15", "age < 15")  # root own step (abs 1)
+  cp$new_cohort("child", from = "root")                     # branched_at_log_len = 1
+  cp$exclude_and_track("child", "drop grp a", "grp == 'a'") # child own #1 (abs 2)
+  cp$exclude_and_track("child", "drop grp b", "grp == 'b'") # child own #2 (abs 3)
+  cp$save()
+
+  # Warm rerun: change the child's SECOND own exclusion (b -> c). The absolute
+  # replay cursor must truncate the stale step rather than retaining it.
+  cp2 <- CohortPipeline$new(d, cache_file = cache)
+  cp2$exclude_and_track("root", "drop age<15", "age < 15")
+  cp2$new_cohort("child", from = "root")
+  cp2$exclude_and_track("child", "drop grp a", "grp == 'a'")
+  cp2$exclude_and_track("child", "drop grp c", "grp == 'c'")
+
+  steps <- cp2$consort()[branch == "child", reason]
+  expect_equal(steps, c("drop grp a", "drop grp c"))  # no stale 'drop grp b'
+  expect_equal(cp2$get_included("child")$id, c(3L, 4L))
+})
+
+test_that("cache_file: reordering new_cohort before a parent exclusion errors", {
+  cache <- tempfile(fileext = ".rds")
+  on.exit(unlink(cache), add = TRUE)
+  d <- data.table(id = 1:6, age = c(10,20,30,40,50,60))
+
+  cp <- CohortPipeline$new(d, cache_file = cache)
+  cp$exclude_and_track("root", "under 18", "age < 18")  # excludes id 1
+  cp$new_cohort("child", from = "root")
+  cp$save()
+
+  # Unchanged order replays cleanly -- the order guard must not false-positive.
+  cp_ok <- CohortPipeline$new(d, cache_file = cache)
+  cp_ok$exclude_and_track("root", "under 18", "age < 18")
+  expect_silent(cp_ok$new_cohort("child", from = "root"))
+  expect_equal(cp_ok$n_included("child"), 5L)
+
+  # Reordered: branch before the parent exclusion. Cold this hits the freeze
+  # rule; warm it used to silently keep a stale snapshot. Now it errors.
+  cp_bad <- CohortPipeline$new(d, cache_file = cache)
+  expect_error(cp_bad$new_cohort("child", from = "root"),
+    "operation order changed")
 })

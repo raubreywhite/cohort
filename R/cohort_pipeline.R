@@ -310,11 +310,25 @@ CohortPipeline <- R6::R6Class(
       }
 
       if (name %in% names(private$nodes)) {
-        existing_parent <- private$nodes[[name]]$parent
+        existing <- private$nodes[[name]]
+        existing_parent <- existing$parent
         if (identical(existing_parent, from)) {
-          # Cache replay: cohort already exists with matching parent.
-          # Trust the cache invariant -- if it survived earlier cascade
-          # invalidations, its inherited prefix is consistent.
+          # Cache replay: cohort already exists with a matching parent.
+          # Guard against a reordered script -- the parent must be at the
+          # same replay position it occupied when this child originally
+          # branched. If it isn't, the branch point moved and the cached
+          # snapshot is stale; a correct rebuild is impossible because the
+          # parent's intermediate status was never stored, so force a cache
+          # invalidation rather than silently keeping wrong data.
+          parent_cursor <- private$nodes[[from]]$replay_cursor %||%
+            length(private$nodes[[from]]$log_entries)
+          if (parent_cursor != existing$branched_at_log_len) {
+            stop("new_cohort: cohort '", name, "' branched from '", from,
+              "' at parent step ", existing$branched_at_log_len,
+              ", but the current run is at parent step ", parent_cursor,
+              " -- the operation order changed. Call $invalidate('", name,
+              "') (or delete the cache) and rerun.", call. = FALSE)
+          }
           # Label is presentation only; refresh it without invalidating.
           if (!is.null(label)) {
             private$nodes[[name]]$label <- label
@@ -418,13 +432,18 @@ CohortPipeline <- R6::R6Class(
             call. = FALSE)
         }
       )
+      if (!is.logical(mask) || !is.null(dim(mask))) {
+        stop(sprintf(
+          "exclude_and_track '%s': predicate must return a logical vector, not %s.",
+          reason, class(mask)[1L]), call. = FALSE)
+      }
       if (length(mask) != length(included_idx)) {
         stop(sprintf(
           "exclude_and_track '%s': predicate returned length %d, expected %d.",
           reason, length(mask), length(included_idx)), call. = FALSE)
       }
       mask[is.na(mask)] <- FALSE
-      exclude_idx <- included_idx[as.logical(mask)]
+      exclude_idx <- included_idx[mask]
       if (length(exclude_idx) > 0L) {
         node$status[exclude_idx] <- step_num
       }
@@ -964,22 +983,25 @@ CohortPipeline <- R6::R6Class(
       }
     },
 
-    # Truncate `branch`'s own log at `own_cursor`, replay the kept own
-    # entries from the at-branch status, drop artifacts, and cascade
-    # invalidate any descendants that branched after the cutoff.
-    .invalidate_from = function(branch, own_cursor) {
+    # Truncate `branch`'s log at absolute index `cursor`, replay the kept
+    # own entries from the at-branch status, drop artifacts, and cascade
+    # invalidate any descendants that branched after the cutoff. `cursor`
+    # is an ABSOLUTE log index (it counts the inherited prefix), matching
+    # `replay_cursor` and the absolute step numbers stored in `status`.
+    .invalidate_from = function(branch, cursor) {
       node <- private$nodes[[branch]]
-      keep_len <- node$branched_at_log_len + own_cursor
+      keep_len <- cursor
       if (keep_len < length(node$log_entries)) {
         node$log_entries <- node$log_entries[seq_len(keep_len)]
       }
       # Re-derive status by replaying the kept own entries against the
-      # at-branch status. Inherited entries (positions <= branched_at)
+      # at-branch status. Inherited entries (positions <= branched_at_log_len)
       # are part of the parent's history and don't need re-execution
       # here -- the parent applied them already.
       status <- node$branched_at_status
-      if (own_cursor > 0L) {
-        for (i in seq_len(own_cursor)) {
+      n_own_keep <- cursor - node$branched_at_log_len
+      if (n_own_keep > 0L) {
+        for (i in seq_len(n_own_keep)) {
           step_idx <- node$branched_at_log_len + i
           entry    <- node$log_entries[[step_idx]]
           included_idx <- which(status == 0L)
@@ -996,7 +1018,7 @@ CohortPipeline <- R6::R6Class(
       node$artifacts     <- list()
       node$artifact_meta <- list()
       node$frozen        <- FALSE
-      node$replay_cursor <- own_cursor
+      node$replay_cursor <- cursor
       private$nodes[[branch]] <- node
 
       # Cascade: descendants that branched after the cutoff inherited the

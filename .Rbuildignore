@@ -9,6 +9,7 @@
 ^Meta$
 ^\.github$
 ^CLAUDE\.md$
+^PROJECT\.md$
 ^\.claude$
 ^\.DS_Store$
 ^cohort_pipeline_proposal\.html$

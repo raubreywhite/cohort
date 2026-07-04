@@ -1,25 +1,22 @@
 url: https://www.rwhite.no/cohort/
 
 template:
-  bootstrap: 5
-  bslib:
-    heading_font: { google: "Newsreader" }
-    code_font:    { google: "IBM Plex Mono" }
-    primary: "#8a1c1c"
-    bg: "#ffffff"
-    fg: "#231c16"
-    link-color: "#8a1c1c"
-    border-radius: "0.15rem"
-  includes:
-    in_header: >
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-navbar:
-  bg: dark
-  type: dark
-  structure:
-    left:  [reference, articles]
-    right: [search, github]
+  package: pkgdowntemplate
+  params:
+    hero:
+      overline: "R package · Cohort construction"
+      title: "Build cohorts with full provenance."
+      lede: >
+        Branched cohort trees, per-step exclusion logging, schema validation at
+        branch boundaries, cached artifacts, and CONSORT diagrams — cleanly
+        separating cohort <em>definition</em> from analysis.
+      cta:
+        primary:
+          text: "Get started"
+          href: "articles/cohort.html"
+        secondary:
+          text: "Browse the reference →"
+          href: "reference/index.html"
 
 reference:
 - title: "Cohort Construction"

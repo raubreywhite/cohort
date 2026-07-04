@@ -8,7 +8,8 @@
 <title>Build Analytic Cohorts with Full Provenance • cohort</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/IBM_Plex_Mono-0.4.10/font.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/Source_Sans_3-0.4.10/font.css" rel="stylesheet">
+<link href="deps/IBM_Plex_Mono-0.4.10/font.css" rel="stylesheet">
 <link href="deps/Newsreader-0.4.10/font.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
@@ -16,13 +17,12 @@
 <meta name="description" content="A framework for building analytic cohorts with full provenance. Supports branched cohort trees, per-step exclusion logging with human-readable reasons, schema validation at branch boundaries, cached derived artifacts on each cohort, and CONSORT diagram generation. The framework cleanly separates cohort definition from analysis: it produces analytic data tables that downstream packages can consume. A shared-base storage strategy keeps memory flat as the cohort tree grows.">
 <meta property="og:description" content="A framework for building analytic cohorts with full provenance. Supports branched cohort trees, per-step exclusion logging with human-readable reasons, schema validation at branch boundaries, cached derived artifacts on each cohort, and CONSORT diagram generation. The framework cleanly separates cohort definition from analysis: it produces analytic data tables that downstream packages can consume. A shared-base storage strategy keeps memory flat as the cohort tree grows.">
 <meta property="og:image" content="https://www.rwhite.no/cohort/logo.png">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
-    <nav class="navbar navbar-expand-lg fixed-top bg-dark" data-bs-theme="dark" aria-label="Site navigation"><div class="container">
+    <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
 
     <a class="navbar-brand me-2" href="index.html">cohort</a>
 
@@ -35,9 +35,21 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="articles/cohort.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
+<li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-packages" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">packages</button>
+  <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-packages">
+<li><a class="dropdown-item" href="https://www.rwhite.no/cohort/">cohort — cohort construction with provenance</a></li>
+    <li><a class="external-link dropdown-item" href="https://www.rwhite.no/plnr/">plnr — plan &amp; fan out analyses</a></li>
+    <li><a class="external-link dropdown-item" href="https://www.rwhite.no/org/">org — project paths &amp; structure</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="external-link dropdown-item" href="https://www.rwhite.no/">rwhite.no</a></li>
+  </ul>
+</li>
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json">
 </form></li>
@@ -48,94 +60,62 @@
 
   </div>
 </nav><div class="container template-home">
-<div class="row">
-  <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header">
-<img src="logo.png" class="logo" alt=""><h1 id="cohort-">cohort 
-<a class="anchor" aria-label="anchor" href="#cohort-"></a>
-</h1>
+
+<div class="rw-hero">
+  <div class="rw-hero-body">
+    <p class="overline">R package · Cohort construction</p>
+    <div class="page-header">
+<img src="logo.png" class="logo" alt=""><h1>Build cohorts with full provenance.</h1>
 </div>
-<p><a href="https://cran.r-project.org/package=cohort" class="external-link"><img src="https://www.r-pkg.org/badges/version/cohort" alt="CRAN status"></a></p>
-<p><code>cohort</code> is a small R package for building analytic cohorts with full provenance: branched cohort trees, per-step exclusion logging, schema validation at branch boundaries, cached derived artifacts, and CONSORT diagram generation.</p>
-<p>The framework cleanly separates cohort definition from analysis: it produces analytic data tables that downstream code consumes.</p>
-<div class="section level2">
-<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
-</h2>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># CRAN (when published)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"cohort"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Development version</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"raubreywhite/cohort"</span><span class="op">)</span></span></code></pre></div>
+    <div class="rw-rule"></div>
+    <p class="rw-lede">Branched cohort trees, per-step exclusion logging, schema validation at branch boundaries, cached artifacts, and CONSORT diagrams — cleanly separating cohort <em>definition</em> from analysis.
+</p>
+    <p class="rw-cta"><a class="rw-btn" href="articles/cohort.html">Get started</a> <a class="rw-btn-link" href="reference/index.html">Browse the reference →</a></p>
+  </div>
+  <div class="rw-hero-art"><img src="logo.png" alt="cohort logo"></div>
 </div>
-<div class="section level2">
-<h2 id="quick-example">Quick example<a class="anchor" aria-label="anchor" href="#quick-example"></a>
-</h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://www.rwhite.no/cohort/">cohort</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-datatable.com" class="external-link">data.table</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">d</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/data.table/man/data.table.html" class="external-link">data.table</a></span><span class="op">(</span></span>
-<span>  id  <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span>
-<span>  age <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">17</span>, <span class="fl">22</span>, <span class="fl">35</span>, <span class="cn">NA</span>, <span class="fl">41</span>, <span class="fl">28</span>, <span class="fl">19</span>, <span class="fl">16</span>, <span class="fl">67</span>, <span class="fl">50</span><span class="op">)</span>,</span>
-<span>  sex <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"F"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="cn">NA</span>, <span class="st">"M"</span>, <span class="st">"M"</span>, <span class="st">"F"</span>, <span class="st">"F"</span>, <span class="st">"M"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cp</span> <span class="op">&lt;-</span> <span class="va"><a href="reference/CohortPipeline.html">CohortPipeline</a></span><span class="op">$</span><span class="fu">new</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">load</span><span class="op">(</span><span class="va">d</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Root-level exclusions on the shared base</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>, <span class="st">"is.na(sex)"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing age"</span>, <span class="st">"is.na(age)"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,    <span class="st">"age &lt; 18"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Branch into a sub-cohort</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_female"</span>, from <span class="op">=</span> <span class="st">"root"</span><span class="op">)</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"Not female"</span>, <span class="st">"sex != 'F'"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Cache a derived artifact on the cohort</span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="st">"mean_age"</span>, from <span class="op">=</span> <span class="st">"adults_female"</span>,</span>
-<span>  fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">dt</span>, <span class="va">sib</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">dt</span><span class="op">$</span><span class="va">age</span><span class="op">)</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">cp</span></span>
-<span><span class="co">#&gt; &lt;CohortPipeline&gt;</span></span>
-<span><span class="co">#&gt; root: loaded = 10, included = 6, excluded = 4, 3 exclusion step(s)</span></span>
-<span><span class="co">#&gt;   adults_female: branched from root at n = 6, own excluded = 1, included = 5, 1 own step(s)</span></span>
-<span></span>
-<span><span class="va">cp</span><span class="op">$</span><span class="fu">consort</span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt;          branch parent step       reason     expr_str n_excluded n_remaining</span></span>
-<span><span class="co">#&gt; 1:         root   &lt;NA&gt;    1  Missing sex   is.na(sex)          1           9</span></span>
-<span><span class="co">#&gt; 2:         root   &lt;NA&gt;    2  Missing age   is.na(age)          1           8</span></span>
-<span><span class="co">#&gt; 3:         root   &lt;NA&gt;    3     Under 18     age &lt; 18          2           6</span></span>
-<span><span class="co">#&gt; 4: adults_female  root    4   Not female sex != 'F'          1           5</span></span></code></pre></div>
-<p>Cached artifacts are plain R objects — retrieve them with <code>cp$get_artifact("adults_female", "&lt;artifact&gt;")</code> and pass them straight into whatever consumes analytic data.</p>
+
+<div class="rw-home">
+  <main id="main" class="rw-home-main"><p class="rw-section">
+What’s inside
+</p>
+<div class="rw-cards">
+<div class="rw-card">
+<div class="rw-card-num">
+01
 </div>
-<div class="section level2">
-<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
-</h2>
-<ul>
-<li><a href="https://www.rwhite.no/cohort/articles/cohort.html">Introduction vignette</a></li>
-<li>
-<code><a href="reference/CohortPipeline.html">?CohortPipeline</a></code> for the full method reference</li>
-</ul>
+<h3>
+Branched cohort trees
+</h3>
+<p>
+Share one base table; each branch keeps an O(n) integer status vector, so branching never copies the underlying data values.
+</p>
 </div>
-<div class="section level2">
-<h2 id="design">Design<a class="anchor" aria-label="anchor" href="#design"></a>
-</h2>
-<ul>
-<li>
-<strong>Shared base, per-branch index.</strong> A single copy of the base table is stored. Each branch holds an O(n) integer status vector. Branching never copies the data values.</li>
-<li>
-<strong>String-form exclusion predicates.</strong> Exclusions are passed as strings so the cohort definition is serializable and auditable.</li>
-<li>
-<strong>No in-band status column.</strong> The user’s data table is never mutated. The <code>.cohort_status</code> column is reconstructed only when <code>$get_everyone()</code> is called.</li>
-<li>
-<strong>Mutation-safe by default.</strong> <code>$get_included()</code> and the <code>$set_artifact()</code> callback contract both default to handing out independent copies.</li>
-</ul>
-<p>See <code>NEWS.md</code> and the package vignette for details.</p>
+<div class="rw-card">
+<div class="rw-card-num">
+02
+</div>
+<h3>
+Exclusion provenance
+</h3>
+<p>
+Every exclusion is logged with a human-readable reason and a serialisable string predicate — ready to render as a CONSORT diagram.
+</p>
+</div>
+<div class="rw-card">
+<div class="rw-card-num">
+03
+</div>
+<h3>
+Cached artifacts
+</h3>
+<p>
+Attach derived objects to any cohort and hand out mutation-safe copies straight into whatever consumes analytic data downstream.
+</p>
 </div>
 </div>
-  </main><aside class="col-md-3"><div class="links">
+
+  </main><aside class="rw-home-aside"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
 <li><a href="https://github.com/raubreywhite/cohort/" class="external-link">Browse source code</a></li>
@@ -175,7 +155,9 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.</p>
+  <p>Crafted by <a href="https://www.rwhite.no" class="external-link">Richard Aubrey White</a>.
+<nav class="rw-family" aria-label="rwhite.no packages"><a class="external-link rw-family-label" href="https://www.rwhite.no/">rwhite.no ↗</a> <a href="https://www.rwhite.no/cohort/">cohort</a> <a href="https://www.rwhite.no/plnr/" class="external-link">plnr</a> <a href="https://www.rwhite.no/org/" class="external-link">org</a>
+</nav></p>
 </div>
 
 <div class="pkgdown-footer-right">

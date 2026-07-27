@@ -502,7 +502,10 @@ exclusion steps and artifacts.
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    A \code{data.table} with one row per cohort.
+    A \code{data.table} with one row per cohort and columns
+\code{name}, \code{parent}, \code{n_total}, \code{n_included}, \code{n_excluded},
+\code{n_own_steps}, \code{n_artifacts}, \code{frozen}. An empty pipeline
+returns a zero-row table carrying those same columns.
   }
 }
 
@@ -524,7 +527,8 @@ exclusion steps and artifacts.
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    Character vector.
+    Character vector. \code{character(0)} when the cohort has no
+artifacts.
   }
 }
 

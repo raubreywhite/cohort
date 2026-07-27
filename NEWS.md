@@ -1,3 +1,17 @@
+# Version 2026.7.27
+
+## Bug fixes
+
+- `$list_artifacts()` now returns `character(0)` for a cohort with no
+  artifacts. It previously returned `NULL`, which broke the documented
+  "character vector" contract and any caller indexing the result.
+- `$list_cohorts()` on an empty pipeline now returns a zero-row
+  `data.table` carrying the eight documented columns (`name`, `parent`,
+  `n_total`, `n_included`, `n_excluded`, `n_own_steps`, `n_artifacts`,
+  `frozen`). It previously returned a zero-row, zero-column table, so
+  column access on an empty pipeline failed. This matches `$consort()`,
+  which already returned a typed empty table.
+
 # Version 2026.6.23
 
 ## Bug fixes

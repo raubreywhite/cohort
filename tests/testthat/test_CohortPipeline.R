@@ -483,3 +483,64 @@ test_that("cache_file: reordering new_cohort before a parent exclusion errors", 
     "operation order changed"
   )
 })
+
+test_that("list_artifacts returns character(0) when a cohort has no artifacts", {
+  cp <- CohortPipeline$new(make_test_dt())
+
+  # Type, not just length: NULL also has length 0.
+  expect_identical(cp$list_artifacts("root"), character(0))
+
+  cp$set_artifact("a1", from = "root", fn = function(dt, sib) nrow(dt))
+  expect_identical(cp$list_artifacts("root"), "a1")
+
+  expect_error(
+    cp$list_artifacts("bogus"),
+    "list_artifacts: unknown cohort 'bogus'."
+  )
+})
+
+test_that("list_cohorts on an empty pipeline keeps its columns", {
+  cp <- CohortPipeline$new()
+  tab <- cp$list_cohorts()
+
+  expect_equal(nrow(tab), 0L)
+  expect_equal(ncol(tab), 8L)
+  expect_identical(
+    names(tab),
+    c(
+      "name",
+      "parent",
+      "n_total",
+      "n_included",
+      "n_excluded",
+      "n_own_steps",
+      "n_artifacts",
+      "frozen"
+    )
+  )
+
+  expect_error(
+    cp$n_included("bogus"),
+    "n_included: unknown cohort 'bogus'."
+  )
+})
+
+test_that("consort already returns a typed empty table", {
+  cp <- CohortPipeline$new(make_test_dt())
+  log <- cp$consort()
+
+  expect_equal(nrow(log), 0L)
+  expect_equal(ncol(log), 7L)
+  expect_identical(
+    names(log),
+    c(
+      "branch",
+      "parent",
+      "step",
+      "reason",
+      "expr_str",
+      "n_excluded",
+      "n_remaining"
+    )
+  )
+})

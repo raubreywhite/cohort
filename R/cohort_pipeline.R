@@ -718,8 +718,23 @@ CohortPipeline <- R6::R6Class(
     #' @description
     #' Tabulate every cohort with its parent, sizes and number of own
     #' exclusion steps and artifacts.
-    #' @return A `data.table` with one row per cohort.
+    #' @return A `data.table` with one row per cohort and columns
+    #'   `name`, `parent`, `n_total`, `n_included`, `n_excluded`,
+    #'   `n_own_steps`, `n_artifacts`, `frozen`. An empty pipeline
+    #'   returns a zero-row table carrying those same columns.
     list_cohorts = function() {
+      if (length(private$nodes) == 0L) {
+        return(data.table::data.table(
+          name = character(),
+          parent = character(),
+          n_total = integer(),
+          n_included = integer(),
+          n_excluded = integer(),
+          n_own_steps = integer(),
+          n_artifacts = integer(),
+          frozen = logical()
+        ))
+      }
       n_total <- self$n_total()
       data.table::rbindlist(lapply(names(private$nodes), function(nm) {
         node <- private$nodes[[nm]]
@@ -741,12 +756,14 @@ CohortPipeline <- R6::R6Class(
     #' @description
     #' Names of cached artifacts attached to a cohort.
     #' @param cohort Character. Cohort name.
-    #' @return Character vector.
+    #' @return Character vector. `character(0)` when the cohort has no
+    #'   artifacts.
     list_artifacts = function(cohort) {
       if (!cohort %in% names(private$nodes)) {
         stop("list_artifacts: unknown cohort '", cohort, "'.", call. = FALSE)
       }
-      names(private$nodes[[cohort]]$artifacts)
+      nms <- names(private$nodes[[cohort]]$artifacts)
+      if (is.null(nms)) character() else nms
     },
 
     #' @description

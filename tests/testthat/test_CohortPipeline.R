@@ -2,7 +2,7 @@ library(data.table)
 
 make_test_dt <- function() {
   data.table(
-    id  = 1:10,
+    id = 1:10,
     age = c(17, 22, 35, NA, 41, 28, 19, 16, 67, 50),
     sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M"),
     grp = c("a", "a", "b", "b", "a", "b", "a", "b", "a", "b")
@@ -25,7 +25,7 @@ test_that("exclude_and_track records the log and removes rows", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
   cp$exclude_and_track("root", "Missing age", "is.na(age)")
-  cp$exclude_and_track("root", "Under 18",    "age < 18")
+  cp$exclude_and_track("root", "Under 18", "age < 18")
 
   expect_equal(cp$n_included("root"), 6L)
 
@@ -110,7 +110,7 @@ test_that("get_included returns an independent copy", {
 test_that("get_everyone reconstructs full per-row status", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp$exclude_and_track("root", "Under 18",    "age < 18")
+  cp$exclude_and_track("root", "Under 18", "age < 18")
 
   ev <- cp$get_everyone("root")
   expect_equal(nrow(ev), 10L)
@@ -131,13 +131,11 @@ test_that("get_everyone reconstructs full per-row status", {
 
 test_that("set_artifact caches results and exposes siblings", {
   cp <- CohortPipeline$new(make_test_dt())
-  cp$set_artifact("n", from = "root",
-    fn = function(dt, sib) nrow(dt))
-  cp$set_artifact("groups", from = "root",
-    fn = function(dt, sib) {
-      stopifnot("n" %in% names(sib))
-      sort(unique(dt$grp))
-    })
+  cp$set_artifact("n", from = "root", fn = function(dt, sib) nrow(dt))
+  cp$set_artifact("groups", from = "root", fn = function(dt, sib) {
+    stopifnot("n" %in% names(sib))
+    sort(unique(dt$grp))
+  })
 
   expect_equal(cp$get_artifact("root", "n"), 10L)
   expect_equal(cp$get_artifact("root", "groups"), c("a", "b"))
@@ -146,11 +144,10 @@ test_that("set_artifact caches results and exposes siblings", {
 
 test_that("set_artifact callbacks may freely mutate the dt argument", {
   cp <- CohortPipeline$new(make_test_dt())
-  cp$set_artifact("mutated_dt", from = "root",
-    fn = function(dt, sib) {
-      dt[, age := age * 2]   # mutate the supplied dt
-      dt
-    })
+  cp$set_artifact("mutated_dt", from = "root", fn = function(dt, sib) {
+    dt[, age := age * 2] # mutate the supplied dt
+    dt
+  })
   # Pipeline's view is untouched
   expect_equal(cp$get_included("root")$age[1], 17)
   # Cached artifact saw the mutation
@@ -161,24 +158,34 @@ test_that("schemas validate types, levels, and NA constraints", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
   cp$exclude_and_track("root", "Missing age", "is.na(age)")
-  cp$declare_schema("root", schema = list(
-    age = list(type = "numeric", na = FALSE),
-    sex = list(type = "character", na = FALSE)
-  ))
+  cp$declare_schema(
+    "root",
+    schema = list(
+      age = list(type = "numeric", na = FALSE),
+      sex = list(type = "character", na = FALSE)
+    )
+  )
   expect_message(cp$validate(), "schemas passed")
 
   # Add a wrong-type spec
-  cp$declare_schema("root", schema = list(
-    age = list(type = "integer", na = FALSE)
-  ), from = "root")
+  cp$declare_schema(
+    "root",
+    schema = list(
+      age = list(type = "integer", na = FALSE)
+    ),
+    from = "root"
+  )
   expect_error(cp$validate(), "expected integer")
 })
 
 test_that("auto_validate raises on schema mismatch at the failure site", {
   cp <- CohortPipeline$new(make_test_dt(), auto_validate = TRUE)
-  cp$declare_schema("root", schema = list(
-    sex = list(type = "character", na = FALSE)  # NAs present!
-  ))
+  cp$declare_schema(
+    "root",
+    schema = list(
+      sex = list(type = "character", na = FALSE) # NAs present!
+    )
+  )
   expect_error(cp$new_cohort("foo", from = "root"), "unexpected NAs")
 })
 
@@ -203,20 +210,20 @@ test_that("list_cohorts and consort return tidy data.tables", {
 test_that("error paths reject unknown branches and conflicting names", {
   cp <- CohortPipeline$new(make_test_dt())
   expect_error(cp$exclude_and_track("nope", "x", "TRUE"), "unknown branch")
-  expect_error(cp$new_cohort("ok", from = "nope"),       "unknown parent")
+  expect_error(cp$new_cohort("ok", from = "nope"), "unknown parent")
   cp$new_cohort("ok", from = "root")
   # Same-parent re-issue is idempotent (required for cache replay).
   expect_silent(cp$new_cohort("ok", from = "root"))
   # Different parent on an existing name is a hard error.
   cp$new_cohort("other", from = "root")
-  expect_error(cp$new_cohort("ok", from = "other"),      "already exists")
-  expect_error(cp$get_artifact("root", "missing"),       "unknown artifact")
+  expect_error(cp$new_cohort("ok", from = "other"), "already exists")
+  expect_error(cp$get_artifact("root", "missing"), "unknown artifact")
 })
 
 test_that("predicate length mismatch is reported clearly", {
   cp <- CohortPipeline$new(make_test_dt())
   expect_error(
-    cp$exclude_and_track("root", "Bad", "TRUE"),  # length-1, not nrow
+    cp$exclude_and_track("root", "Bad", "TRUE"), # length-1, not nrow
     "predicate returned length"
   )
 })
@@ -225,15 +232,23 @@ test_that("exclude_and_track rejects non-logical predicate results", {
   cp <- CohortPipeline$new(make_test_dt())
   # Character / numeric / factor results would otherwise be silently coerced
   # by as.logical(), corrupting the exclusion counts.
-  expect_error(cp$exclude_and_track("root", "char",   "sex"),
-    "must return a logical vector, not character")
-  expect_error(cp$exclude_and_track("root", "num",    "age"),
-    "must return a logical vector, not numeric")
-  expect_error(cp$exclude_and_track("root", "factor", "factor(sex)"),
-    "must return a logical vector, not factor")
+  expect_error(
+    cp$exclude_and_track("root", "char", "sex"),
+    "must return a logical vector, not character"
+  )
+  expect_error(
+    cp$exclude_and_track("root", "num", "age"),
+    "must return a logical vector, not numeric"
+  )
+  expect_error(
+    cp$exclude_and_track("root", "factor", "factor(sex)"),
+    "must return a logical vector, not factor"
+  )
   # A logical *matrix* passes is.logical() but must still be rejected.
-  expect_error(cp$exclude_and_track("root", "matrix", "cbind(age > 18, age > 40)"),
-    "must return a logical vector, not matrix")
+  expect_error(
+    cp$exclude_and_track("root", "matrix", "cbind(age > 18, age > 40)"),
+    "must return a logical vector, not matrix"
+  )
   # The failed calls leave the cohort untouched; a real logical predicate works.
   expect_equal(cp$n_included("root"), 10L)
   cp$exclude_and_track("root", "Under 18", "age < 18")
@@ -264,7 +279,6 @@ test_that("plot() defaults to every cohort regardless of freeze state", {
 })
 
 
-
 test_that("cache_file: warm replay preserves state, divergent ops recompute", {
   cache <- tempfile(fileext = ".rds")
   on.exit(unlink(cache), add = TRUE)
@@ -272,35 +286,41 @@ test_that("cache_file: warm replay preserves state, divergent ops recompute", {
   # Cold run.
   cp <- CohortPipeline$new(make_test_dt(), cache_file = cache)
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp$exclude_and_track("root", "Under 18",    "age < 18")
+  cp$exclude_and_track("root", "Under 18", "age < 18")
   cp$new_cohort("females", from = "root")
   cp$exclude_and_track("females", "Not female", "sex != 'F'")
-  cp$set_artifact("dt_sub", from = "females",
+  cp$set_artifact(
+    "dt_sub",
+    from = "females",
     fn = function(dt, sib, argset) dt[, .(id, age, sex)],
     argset = list(version = 1L)
   )
   cp$save()
   expect_true(file.exists(cache))
   baseline <- list(
-    root_n    = cp$n_included("root"),
-    fem_n     = cp$n_included("females"),
-    art_cols  = sort(names(cp$get_artifact("females", "dt_sub")))
+    root_n = cp$n_included("root"),
+    fem_n = cp$n_included("females"),
+    art_cols = sort(names(cp$get_artifact("females", "dt_sub")))
   )
 
   # Warm replay with identical ops.
   cp2 <- CohortPipeline$new(make_test_dt(), cache_file = cache)
   cp2$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp2$exclude_and_track("root", "Under 18",    "age < 18")
+  cp2$exclude_and_track("root", "Under 18", "age < 18")
   cp2$new_cohort("females", from = "root")
   cp2$exclude_and_track("females", "Not female", "sex != 'F'")
-  cp2$set_artifact("dt_sub", from = "females",
+  cp2$set_artifact(
+    "dt_sub",
+    from = "females",
     fn = function(dt, sib, argset) dt[, .(id, age, sex)],
     argset = list(version = 1L)
   )
-  expect_equal(cp2$n_included("root"),    baseline$root_n)
+  expect_equal(cp2$n_included("root"), baseline$root_n)
   expect_equal(cp2$n_included("females"), baseline$fem_n)
-  expect_equal(sort(names(cp2$get_artifact("females", "dt_sub"))),
-               baseline$art_cols)
+  expect_equal(
+    sort(names(cp2$get_artifact("females", "dt_sub"))),
+    baseline$art_cols
+  )
 })
 
 test_that("cache_file: changed exclusion expr_str triggers re-execution + cascade", {
@@ -316,10 +336,10 @@ test_that("cache_file: changed exclusion expr_str triggers re-execution + cascad
 
   # Re-run with a stricter exclusion: age cutoff bumped to 21.
   cp2 <- CohortPipeline$new(make_test_dt(), cache_file = cache)
-  cp2$exclude_and_track("root", "Under 18", "age < 21")  # different expr_str
+  cp2$exclude_and_track("root", "Under 18", "age < 21") # different expr_str
   cp2$new_cohort("females", from = "root")
   cp2$exclude_and_track("females", "Not female", "sex != 'F'")
-  expect_lt(cp2$n_included("root"), baseline_root)  # fewer included now
+  expect_lt(cp2$n_included("root"), baseline_root) # fewer included now
   # The branched cohort cascade-invalidated and was rebuilt against
   # the new root state, so it exists with consistent state.
   expect_true("females" %in% cp2$list_cohorts()$name)
@@ -331,30 +351,32 @@ test_that("cache_file: changed argset re-runs the artifact fn", {
 
   cp <- CohortPipeline$new(make_test_dt(), cache_file = cache)
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp$set_artifact("subset", from = "root",
+  cp$set_artifact(
+    "subset",
+    from = "root",
     fn = function(dt, sib, argset) dt[, argset$cols, with = FALSE],
     argset = list(cols = c("id", "age"))
   )
-  expect_equal(sort(names(cp$get_artifact("root", "subset"))),
-               c("age", "id"))
+  expect_equal(sort(names(cp$get_artifact("root", "subset"))), c("age", "id"))
   cp$save()
 
   # Re-run with a different argset.
   cp2 <- CohortPipeline$new(make_test_dt(), cache_file = cache)
   cp2$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp2$set_artifact("subset", from = "root",
+  cp2$set_artifact(
+    "subset",
+    from = "root",
     fn = function(dt, sib, argset) dt[, argset$cols, with = FALSE],
-    argset = list(cols = c("id", "sex"))   # changed
+    argset = list(cols = c("id", "sex")) # changed
   )
-  expect_equal(sort(names(cp2$get_artifact("root", "subset"))),
-               c("id", "sex"))
+  expect_equal(sort(names(cp2$get_artifact("root", "subset"))), c("id", "sex"))
 })
 
 test_that("set_artifact accepts the legacy 2-arg fn signature", {
   cp <- CohortPipeline$new(make_test_dt())
-  cp$set_artifact("legacy", from = "root",
-    fn = function(dt, sib) dt[, .(id, age)]
-  )
+  cp$set_artifact("legacy", from = "root", fn = function(dt, sib) {
+    dt[, .(id, age)]
+  })
   art <- cp$get_artifact("root", "legacy")
   expect_equal(sort(names(art)), c("age", "id"))
 })
@@ -377,8 +399,15 @@ test_that("save errors when no cache_file is set", {
 test_that("cache_file: version mismatch errors loudly", {
   cache <- tempfile(fileext = ".rds")
   on.exit(unlink(cache), add = TRUE)
-  saveRDS(list(cache_version = 999L, base_dt = NULL,
-               nodes = list(), schemas = list()), cache)
+  saveRDS(
+    list(
+      cache_version = 999L,
+      base_dt = NULL,
+      nodes = list(),
+      schemas = list()
+    ),
+    cache
+  )
   expect_error(CohortPipeline$new(cache_file = cache), "cache file")
 })
 
@@ -404,11 +433,15 @@ test_that("cache_file: dt content change is detected and rebuilds", {
 test_that("cache_file: a non-root cohort changing a later own exclusion drops the stale step", {
   cache <- tempfile(fileext = ".rds")
   on.exit(unlink(cache), add = TRUE)
-  d <- data.table(id = 1:6, age = c(10,20,30,40,50,60), grp = c("a","a","b","b","c","c"))
+  d <- data.table(
+    id = 1:6,
+    age = c(10, 20, 30, 40, 50, 60),
+    grp = c("a", "a", "b", "b", "c", "c")
+  )
 
   cp <- CohortPipeline$new(d, cache_file = cache)
-  cp$exclude_and_track("root", "drop age<15", "age < 15")  # root own step (abs 1)
-  cp$new_cohort("child", from = "root")                     # branched_at_log_len = 1
+  cp$exclude_and_track("root", "drop age<15", "age < 15") # root own step (abs 1)
+  cp$new_cohort("child", from = "root") # branched_at_log_len = 1
   cp$exclude_and_track("child", "drop grp a", "grp == 'a'") # child own #1 (abs 2)
   cp$exclude_and_track("child", "drop grp b", "grp == 'b'") # child own #2 (abs 3)
   cp$save()
@@ -422,17 +455,17 @@ test_that("cache_file: a non-root cohort changing a later own exclusion drops th
   cp2$exclude_and_track("child", "drop grp c", "grp == 'c'")
 
   steps <- cp2$consort()[branch == "child", reason]
-  expect_equal(steps, c("drop grp a", "drop grp c"))  # no stale 'drop grp b'
+  expect_equal(steps, c("drop grp a", "drop grp c")) # no stale 'drop grp b'
   expect_equal(cp2$get_included("child")$id, c(3L, 4L))
 })
 
 test_that("cache_file: reordering new_cohort before a parent exclusion errors", {
   cache <- tempfile(fileext = ".rds")
   on.exit(unlink(cache), add = TRUE)
-  d <- data.table(id = 1:6, age = c(10,20,30,40,50,60))
+  d <- data.table(id = 1:6, age = c(10, 20, 30, 40, 50, 60))
 
   cp <- CohortPipeline$new(d, cache_file = cache)
-  cp$exclude_and_track("root", "under 18", "age < 18")  # excludes id 1
+  cp$exclude_and_track("root", "under 18", "age < 18") # excludes id 1
   cp$new_cohort("child", from = "root")
   cp$save()
 
@@ -445,6 +478,8 @@ test_that("cache_file: reordering new_cohort before a parent exclusion errors", 
   # Reordered: branch before the parent exclusion. Cold this hits the freeze
   # rule; warm it used to silently keep a stale snapshot. Now it errors.
   cp_bad <- CohortPipeline$new(d, cache_file = cache)
-  expect_error(cp_bad$new_cohort("child", from = "root"),
-    "operation order changed")
+  expect_error(
+    cp_bad$new_cohort("child", from = "root"),
+    "operation order changed"
+  )
 })

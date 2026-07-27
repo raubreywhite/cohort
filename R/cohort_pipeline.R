@@ -113,7 +113,6 @@ CohortPipeline <- R6::R6Class(
   "CohortPipeline",
   cloneable = FALSE,
   public = list(
-
     #' @description
     #' Create a new `CohortPipeline`. If `cache_file` is set and the file
     #' exists, the pipeline is restored from that snapshot and `dt` is
@@ -139,8 +138,12 @@ CohortPipeline <- R6::R6Class(
     #'   accumulating until the next manual `$validate()`. Defaults to
     #'   `FALSE`.
     #' @return A new `CohortPipeline` instance.
-    initialize = function(dt = NULL, cache_file = NULL,
-                          label = NULL, auto_validate = FALSE) {
+    initialize = function(
+      dt = NULL,
+      cache_file = NULL,
+      label = NULL,
+      auto_validate = FALSE
+    ) {
       private$schemas <- list()
       private$nodes <- list()
       private$auto_validate <- isTRUE(auto_validate)
@@ -149,10 +152,16 @@ CohortPipeline <- R6::R6Class(
       if (!is.null(cache_file) && file.exists(cache_file)) {
         snap <- readRDS(cache_file)
         if (!identical(snap$cache_version, .COHORT_CACHE_VERSION)) {
-          stop("CohortPipeline: cache file '", cache_file, "' is version ",
-            snap$cache_version, " but this package expects ",
-            .COHORT_CACHE_VERSION, ". Delete the cache to start fresh.",
-            call. = FALSE)
+          stop(
+            "CohortPipeline: cache file '",
+            cache_file,
+            "' is version ",
+            snap$cache_version,
+            " but this package expects ",
+            .COHORT_CACHE_VERSION,
+            ". Delete the cache to start fresh.",
+            call. = FALSE
+          )
         }
         # Verify the supplied data matches the cached base table via a
         # full content hash. Cheap (sub-second on millions of rows) and
@@ -165,10 +174,10 @@ CohortPipeline <- R6::R6Class(
           cache_match <- identical(dt_hash, snap$base_dt_hash)
         }
         if (cache_match) {
-          private$base_dt      <- snap$base_dt
+          private$base_dt <- snap$base_dt
           private$base_dt_hash <- snap$base_dt_hash
-          private$nodes        <- snap$nodes
-          private$schemas      <- snap$schemas
+          private$nodes <- snap$nodes
+          private$schemas <- snap$schemas
           for (nm in names(private$nodes)) {
             private$nodes[[nm]]$replay_cursor <-
               private$nodes[[nm]]$branched_at_log_len
@@ -179,9 +188,11 @@ CohortPipeline <- R6::R6Class(
             private$nodes$root$label <- label
           }
         } else {
-          warning("CohortPipeline: supplied 'dt' content does not match ",
+          warning(
+            "CohortPipeline: supplied 'dt' content does not match ",
             "the cached base table (digest mismatch); discarding cache ",
-            "and rebuilding from scratch.")
+            "and rebuilding from scratch."
+          )
           private$install_base(dt, label = label %||% "Cohort participants")
           private$base_dt_hash <- dt_hash
         }
@@ -213,13 +224,17 @@ CohortPipeline <- R6::R6Class(
         }
         base <- private$schemas[[from]]
         if (!is.null(schema)) {
-          for (nm in names(schema)) base[[nm]] <- schema[[nm]]
+          for (nm in names(schema)) {
+            base[[nm]] <- schema[[nm]]
+          }
         }
         private$schemas[[branch]] <- base
       } else {
         if (is.null(schema)) {
-          stop("declare_schema: 'schema' must be supplied when 'from' is NULL.",
-            call. = FALSE)
+          stop(
+            "declare_schema: 'schema' must be supplied when 'from' is NULL.",
+            call. = FALSE
+          )
         }
         private$schemas[[branch]] <- schema
       }
@@ -242,39 +257,64 @@ CohortPipeline <- R6::R6Class(
         for (col_name in names(schema)) {
           spec <- schema[[col_name]]
           if (!col_name %in% names(dt)) {
-            errors <- c(errors,
-              sprintf("[%s] Missing column: %s", branch, col_name))
+            errors <- c(
+              errors,
+              sprintf("[%s] Missing column: %s", branch, col_name)
+            )
             next
           }
           col <- dt[[col_name]]
-          ok <- switch(spec$type,
-            "integer"   = is.integer(col),
-            "numeric"   = is.numeric(col),
-            "factor"    = is.factor(col),
-            "logical"   = is.logical(col),
-            "Date"      = inherits(col, "Date"),
+          ok <- switch(
+            spec$type,
+            "integer" = is.integer(col),
+            "numeric" = is.numeric(col),
+            "factor" = is.factor(col),
+            "logical" = is.logical(col),
+            "Date" = inherits(col, "Date"),
             "character" = is.character(col),
             TRUE
           )
           if (!ok) {
-            errors <- c(errors, sprintf("[%s] %s: expected %s, got %s",
-              branch, col_name, spec$type, class(col)[1]))
+            errors <- c(
+              errors,
+              sprintf(
+                "[%s] %s: expected %s, got %s",
+                branch,
+                col_name,
+                spec$type,
+                class(col)[1]
+              )
+            )
           }
-          if (identical(spec$type, "factor") && !is.null(spec$levels) &&
-              !identical(levels(col), spec$levels)) {
-            errors <- c(errors,
-              sprintf("[%s] %s: factor levels mismatch", branch, col_name))
+          if (
+            identical(spec$type, "factor") &&
+              !is.null(spec$levels) &&
+              !identical(levels(col), spec$levels)
+          ) {
+            errors <- c(
+              errors,
+              sprintf("[%s] %s: factor levels mismatch", branch, col_name)
+            )
           }
           if (isFALSE(spec$na) && anyNA(col)) {
-            errors <- c(errors,
-              sprintf("[%s] %s: unexpected NAs (%d)",
-                branch, col_name, sum(is.na(col))))
+            errors <- c(
+              errors,
+              sprintf(
+                "[%s] %s: unexpected NAs (%d)",
+                branch,
+                col_name,
+                sum(is.na(col))
+              )
+            )
           }
         }
       }
       if (length(errors) > 0L) {
-        stop("CohortPipeline validation failed:\n  ",
-          paste(errors, collapse = "\n  "), call. = FALSE)
+        stop(
+          "CohortPipeline validation failed:\n  ",
+          paste(errors, collapse = "\n  "),
+          call. = FALSE
+        )
       }
       message("[validate] All CohortPipeline schemas passed")
       invisible(self)
@@ -285,7 +325,10 @@ CohortPipeline <- R6::R6Class(
     #' @return A `data.table` with columns `branch` and `n_cols`.
     list_schemas = function() {
       data.table::rbindlist(lapply(names(private$schemas), function(nm) {
-        data.table::data.table(branch = nm, n_cols = length(private$schemas[[nm]]))
+        data.table::data.table(
+          branch = nm,
+          n_cols = length(private$schemas[[nm]])
+        )
       }))
     },
 
@@ -323,11 +366,20 @@ CohortPipeline <- R6::R6Class(
           parent_cursor <- private$nodes[[from]]$replay_cursor %||%
             length(private$nodes[[from]]$log_entries)
           if (parent_cursor != existing$branched_at_log_len) {
-            stop("new_cohort: cohort '", name, "' branched from '", from,
-              "' at parent step ", existing$branched_at_log_len,
-              ", but the current run is at parent step ", parent_cursor,
-              " -- the operation order changed. Call $invalidate('", name,
-              "') (or delete the cache) and rerun.", call. = FALSE)
+            stop(
+              "new_cohort: cohort '",
+              name,
+              "' branched from '",
+              from,
+              "' at parent step ",
+              existing$branched_at_log_len,
+              ", but the current run is at parent step ",
+              parent_cursor,
+              " -- the operation order changed. Call $invalidate('",
+              name,
+              "') (or delete the cache) and rerun.",
+              call. = FALSE
+            )
           }
           # Label is presentation only; refresh it without invalidating.
           if (!is.null(label)) {
@@ -336,30 +388,42 @@ CohortPipeline <- R6::R6Class(
           private$nodes[[from]]$frozen <- TRUE
           return(invisible(self))
         }
-        stop("new_cohort: cohort '", name, "' already exists",
-          if (!is.na(existing_parent)) paste0(" (parent '", existing_parent, "')") else "",
-          ". Call $invalidate('", name, "') to drop it first.",
-          call. = FALSE)
+        stop(
+          "new_cohort: cohort '",
+          name,
+          "' already exists",
+          if (!is.na(existing_parent)) {
+            paste0(" (parent '", existing_parent, "')")
+          } else {
+            ""
+          },
+          ". Call $invalidate('",
+          name,
+          "') to drop it first.",
+          call. = FALSE
+        )
       }
 
       parent_node <- private$nodes[[from]]
       private$nodes[[name]] <- list(
-        parent              = from,
-        label               = label %||% name,
-        status              = parent_node$status,
-        branched_at_status  = parent_node$status,
-        log_entries         = parent_node$log_entries,
+        parent = from,
+        label = label %||% name,
+        status = parent_node$status,
+        branched_at_status = parent_node$status,
+        log_entries = parent_node$log_entries,
         branched_at_log_len = length(parent_node$log_entries),
-        branched_at_n       = sum(parent_node$status == 0L),
-        artifacts           = list(),
-        frozen              = FALSE,
-        replay_cursor       = length(parent_node$log_entries)
+        branched_at_n = sum(parent_node$status == 0L),
+        artifacts = list(),
+        frozen = FALSE,
+        replay_cursor = length(parent_node$log_entries)
       )
       # Freeze the parent: branching from a cohort means its definition
       # must not change again, otherwise sibling branches would have
       # silently different parent states.
       private$nodes[[from]]$frozen <- TRUE
-      if (private$auto_validate) self$validate()
+      if (private$auto_validate) {
+        self$validate()
+      }
       invisible(self)
     },
 
@@ -379,8 +443,10 @@ CohortPipeline <- R6::R6Class(
         stop("exclude_and_track: unknown branch '", branch, "'.", call. = FALSE)
       }
       if (!is.character(expr_str) || length(expr_str) != 1L) {
-        stop("exclude_and_track: 'expr_str' must be a single character string.",
-          call. = FALSE)
+        stop(
+          "exclude_and_track: 'expr_str' must be a single character string.",
+          call. = FALSE
+        )
       }
       node <- private$nodes[[branch]]
       cursor <- node$replay_cursor %||% length(node$log_entries)
@@ -389,8 +455,10 @@ CohortPipeline <- R6::R6Class(
       # the next entry must match exactly or we diverge.
       if (cursor < length(node$log_entries)) {
         cached <- node$log_entries[[cursor + 1L]]
-        if (identical(cached$reason, reason) &&
-            identical(cached$expr_str, expr_str)) {
+        if (
+          identical(cached$reason, reason) &&
+            identical(cached$expr_str, expr_str)
+        ) {
           private$nodes[[branch]]$replay_cursor <- cursor + 1L
           return(invisible(self))
         }
@@ -403,20 +471,24 @@ CohortPipeline <- R6::R6Class(
       # this session. Cache replay never reaches here for an unchanged
       # script, so the strict check stays intact.
       if (isTRUE(node$frozen)) {
-        stop("exclude_and_track: cohort '", branch,
+        stop(
+          "exclude_and_track: cohort '",
+          branch,
           "' is frozen (already has children or artifacts). ",
           "Apply all exclusions before branching from it or attaching ",
-          "artifacts.", call. = FALSE)
+          "artifacts.",
+          call. = FALSE
+        )
       }
       step_num <- length(node$log_entries) + 1L
       included_idx <- which(node$status == 0L)
 
       if (length(included_idx) == 0L) {
         node$log_entries[[step_num]] <- list(
-          step        = step_num,
-          reason      = reason,
-          expr_str    = expr_str,
-          n_excluded  = 0L,
+          step = step_num,
+          reason = reason,
+          expr_str = expr_str,
+          n_excluded = 0L,
           n_remaining = 0L
         )
         node$replay_cursor <- step_num
@@ -428,19 +500,32 @@ CohortPipeline <- R6::R6Class(
       mask <- tryCatch(
         private$base_dt[included_idx, eval(expr_parsed)],
         error = function(e) {
-          stop(sprintf("exclude_and_track '%s': %s", reason, e$message),
-            call. = FALSE)
+          stop(
+            sprintf("exclude_and_track '%s': %s", reason, e$message),
+            call. = FALSE
+          )
         }
       )
       if (!is.logical(mask) || !is.null(dim(mask))) {
-        stop(sprintf(
-          "exclude_and_track '%s': predicate must return a logical vector, not %s.",
-          reason, class(mask)[1L]), call. = FALSE)
+        stop(
+          sprintf(
+            "exclude_and_track '%s': predicate must return a logical vector, not %s.",
+            reason,
+            class(mask)[1L]
+          ),
+          call. = FALSE
+        )
       }
       if (length(mask) != length(included_idx)) {
-        stop(sprintf(
-          "exclude_and_track '%s': predicate returned length %d, expected %d.",
-          reason, length(mask), length(included_idx)), call. = FALSE)
+        stop(
+          sprintf(
+            "exclude_and_track '%s': predicate returned length %d, expected %d.",
+            reason,
+            length(mask),
+            length(included_idx)
+          ),
+          call. = FALSE
+        )
       }
       mask[is.na(mask)] <- FALSE
       exclude_idx <- included_idx[mask]
@@ -449,10 +534,10 @@ CohortPipeline <- R6::R6Class(
       }
       n_remaining <- sum(node$status == 0L)
       node$log_entries[[step_num]] <- list(
-        step        = step_num,
-        reason      = reason,
-        expr_str    = expr_str,
-        n_excluded  = length(exclude_idx),
+        step = step_num,
+        reason = reason,
+        expr_str = expr_str,
+        n_excluded = length(exclude_idx),
         n_remaining = n_remaining
       )
       node$replay_cursor <- step_num
@@ -514,7 +599,9 @@ CohortPipeline <- R6::R6Class(
         # (subsequent ones may chain via `sib`).
         keep <- character()
         for (nm in names(node$artifacts)) {
-          if (identical(nm, name)) break
+          if (identical(nm, name)) {
+            break
+          }
           keep <- c(keep, nm)
         }
         node$artifacts <- node$artifacts[keep]
@@ -530,16 +617,20 @@ CohortPipeline <- R6::R6Class(
         fn(self$get_included(from), node$artifacts)
       }
       node$artifacts[[name]] <- result
-      if (is.null(node$artifact_meta)) node$artifact_meta <- list()
+      if (is.null(node$artifact_meta)) {
+        node$artifact_meta <- list()
+      }
       node$artifact_meta[[name]] <- list(
-        body   = body(fn),
+        body = body(fn),
         argset = argset
       )
       # Freeze on first artifact: subsequent exclude_and_track would
       # silently invalidate the cached value.
       node$frozen <- TRUE
       private$nodes[[from]] <- node
-      if (private$auto_validate) self$validate()
+      if (private$auto_validate) {
+        self$validate()
+      }
       invisible(self)
     },
 
@@ -576,9 +667,7 @@ CohortPipeline <- R6::R6Class(
       } else {
         vapply(node$log_entries, function(e) e$reason, character(1L))
       }
-      status_chr <- ifelse(node$status == 0L,
-        "included",
-        reasons[node$status])
+      status_chr <- ifelse(node$status == 0L, "included", reasons[node$status])
       out <- data.table::copy(private$base_dt)
       out[, .cohort_status := status_chr]
       out
@@ -595,10 +684,15 @@ CohortPipeline <- R6::R6Class(
       }
       node <- private$nodes[[cohort]]
       if (!name %in% names(node$artifacts)) {
-        stop("get_artifact: unknown artifact '", name, "' on cohort '",
-          cohort, "'. Available: ",
+        stop(
+          "get_artifact: unknown artifact '",
+          name,
+          "' on cohort '",
+          cohort,
+          "'. Available: ",
           paste(names(node$artifacts), collapse = ", "),
-          call. = FALSE)
+          call. = FALSE
+        )
       }
       node$artifacts[[name]]
     },
@@ -632,14 +726,14 @@ CohortPipeline <- R6::R6Class(
         n_inc <- sum(node$status == 0L)
         own_n_steps <- length(node$log_entries) - node$branched_at_log_len
         data.table::data.table(
-          name           = nm,
-          parent         = node$parent,
-          n_total        = n_total,
-          n_included     = n_inc,
-          n_excluded     = n_total - n_inc,
-          n_own_steps    = own_n_steps,
-          n_artifacts    = length(node$artifacts),
-          frozen         = isTRUE(node$frozen)
+          name = nm,
+          parent = node$parent,
+          n_total = n_total,
+          n_included = n_inc,
+          n_excluded = n_total - n_inc,
+          n_own_steps = own_n_steps,
+          n_artifacts = length(node$artifacts),
+          frozen = isTRUE(node$frozen)
         )
       }))
     },
@@ -669,13 +763,15 @@ CohortPipeline <- R6::R6Class(
         own_idx <- seq_len(length(node$log_entries))[
           seq_along(node$log_entries) > node$branched_at_log_len
         ]
-        if (length(own_idx) == 0L) next
+        if (length(own_idx) == 0L) {
+          next
+        }
         own_entries <- lapply(node$log_entries[own_idx], function(e) {
           data.table::data.table(
-            step        = e$step,
-            reason      = e$reason,
-            expr_str    = e$expr_str %||% NA_character_,
-            n_excluded  = e$n_excluded,
+            step = e$step,
+            reason = e$reason,
+            expr_str = e$expr_str %||% NA_character_,
+            n_excluded = e$n_excluded,
             n_remaining = e$n_remaining
           )
         })
@@ -686,18 +782,28 @@ CohortPipeline <- R6::R6Class(
       }
       if (length(logs) == 0L) {
         return(data.table::data.table(
-          branch      = character(),
-          parent      = character(),
-          step        = integer(),
-          reason      = character(),
-          expr_str    = character(),
-          n_excluded  = integer(),
+          branch = character(),
+          parent = character(),
+          step = integer(),
+          reason = character(),
+          expr_str = character(),
+          n_excluded = integer(),
           n_remaining = integer()
         ))
       }
       out <- data.table::rbindlist(logs)
-      data.table::setcolorder(out, c("branch", "parent", "step",
-        "reason", "expr_str", "n_excluded", "n_remaining"))
+      data.table::setcolorder(
+        out,
+        c(
+          "branch",
+          "parent",
+          "step",
+          "reason",
+          "expr_str",
+          "n_excluded",
+          "n_remaining"
+        )
+      )
       out
     },
 
@@ -723,17 +829,23 @@ CohortPipeline <- R6::R6Class(
     #' @param text_width Integer. Wrap width for box text.
     #' @param title_fontsize Numeric. Title fontsize for each panel.
     #' @return A list of grobs (invisibly).
-    draw_consort_panels = function(panels, file = NULL, ncol = NULL,
-                                   width = NULL, height = NULL,
-                                   text_width = 40, title_fontsize = 14) {
+    draw_consort_panels = function(
+      panels,
+      file = NULL,
+      ncol = NULL,
+      width = NULL,
+      height = NULL,
+      text_width = 40,
+      title_fontsize = 14
+    ) {
       .draw_consort_panels_impl(
-        panels         = panels,
-        nodes          = private$nodes,
-        file           = file,
-        ncol           = ncol,
-        width          = width,
-        height         = height,
-        text_width     = text_width,
+        panels = panels,
+        nodes = private$nodes,
+        file = file,
+        ncol = ncol,
+        width = width,
+        height = height,
+        text_width = text_width,
         title_fontsize = title_fontsize
       )
     },
@@ -754,30 +866,42 @@ CohortPipeline <- R6::R6Class(
     #' @param ncol,width,height,text_width,title_fontsize Optional layout
     #'   overrides; see `$draw_consort_panels()`.
     #' @return A list of grobs (invisibly).
-    plot = function(cohorts = NULL, file = NULL, ncol = NULL,
-                    width = NULL, height = NULL,
-                    text_width = 40, title_fontsize = 14) {
+    plot = function(
+      cohorts = NULL,
+      file = NULL,
+      ncol = NULL,
+      width = NULL,
+      height = NULL,
+      text_width = 40,
+      title_fontsize = 14
+    ) {
       if (length(private$nodes) == 0L) {
-        stop("plot: pipeline has no cohorts. Construct with ",
-          "CohortPipeline$new(dt) first.", call. = FALSE)
+        stop(
+          "plot: pipeline has no cohorts. Construct with ",
+          "CohortPipeline$new(dt) first.",
+          call. = FALSE
+        )
       }
       if (is.null(cohorts)) {
         cohorts <- names(private$nodes)
       } else {
         unknown <- setdiff(cohorts, names(private$nodes))
         if (length(unknown) > 0L) {
-          stop("plot: unknown cohort(s): ",
-            paste(unknown, collapse = ", "), call. = FALSE)
+          stop(
+            "plot: unknown cohort(s): ",
+            paste(unknown, collapse = ", "),
+            call. = FALSE
+          )
         }
       }
       panels <- private$build_default_panels(cohorts)
       self$draw_consort_panels(
-        panels         = panels,
-        file           = file,
-        ncol           = ncol,
-        width          = width,
-        height         = height,
-        text_width     = text_width,
+        panels = panels,
+        file = file,
+        ncol = ncol,
+        width = width,
+        height = height,
+        text_width = text_width,
         title_fontsize = title_fontsize
       )
     },
@@ -790,7 +914,9 @@ CohortPipeline <- R6::R6Class(
     print = function(...) {
       cat("<CohortPipeline>\n")
       if (length(private$nodes) == 0L) {
-        cat("  (empty -- construct with CohortPipeline$new(dt) to install a base table)\n")
+        cat(
+          "  (empty -- construct with CohortPipeline$new(dt) to install a base table)\n"
+        )
         return(invisible(self))
       }
       n_total <- self$n_total()
@@ -802,7 +928,8 @@ CohortPipeline <- R6::R6Class(
         if (is.na(node$parent)) {
           cat(sprintf(
             "%s%s: loaded = %s, included = %s, excluded = %s, %d exclusion step(s)\n",
-            indent, nm,
+            indent,
+            nm,
             format(n_total, big.mark = ","),
             format(n_inc, big.mark = ","),
             format(n_total - n_inc, big.mark = ","),
@@ -812,7 +939,9 @@ CohortPipeline <- R6::R6Class(
           n_own_excluded <- node$branched_at_n - n_inc
           cat(sprintf(
             "%s%s: branched from %s at n = %s, own excluded = %s, included = %s, %d own step(s)\n",
-            indent, nm, node$parent,
+            indent,
+            nm,
+            node$parent,
             format(node$branched_at_n, big.mark = ","),
             format(n_own_excluded, big.mark = ","),
             format(n_inc, big.mark = ","),
@@ -837,17 +966,23 @@ CohortPipeline <- R6::R6Class(
     save = function(file = NULL) {
       path <- file %||% private$cache_file
       if (is.null(path)) {
-        stop("save: no cache_file set. Pass one to CohortPipeline$new() or ",
-          "to $save(file = ...) explicitly.", call. = FALSE)
+        stop(
+          "save: no cache_file set. Pass one to CohortPipeline$new() or ",
+          "to $save(file = ...) explicitly.",
+          call. = FALSE
+        )
       }
       dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-      saveRDS(list(
-        cache_version = .COHORT_CACHE_VERSION,
-        base_dt       = private$base_dt,
-        base_dt_hash  = private$base_dt_hash,
-        nodes         = private$nodes,
-        schemas       = private$schemas
-      ), file = path)
+      saveRDS(
+        list(
+          cache_version = .COHORT_CACHE_VERSION,
+          base_dt = private$base_dt,
+          base_dt_hash = private$base_dt_hash,
+          nodes = private$nodes,
+          schemas = private$schemas
+        ),
+        file = path
+      )
       invisible(self)
     },
 
@@ -870,12 +1005,20 @@ CohortPipeline <- R6::R6Class(
       } else {
         node <- private$nodes[[cohort]]
         if (!artifact %in% names(node$artifacts)) {
-          stop("invalidate: cohort '", cohort, "' has no artifact '",
-            artifact, "'.", call. = FALSE)
+          stop(
+            "invalidate: cohort '",
+            cohort,
+            "' has no artifact '",
+            artifact,
+            "'.",
+            call. = FALSE
+          )
         }
         keep <- character()
         for (nm in names(node$artifacts)) {
-          if (identical(nm, artifact)) break
+          if (identical(nm, artifact)) {
+            break
+          }
           keep <- c(keep, nm)
         }
         node$artifacts <- node$artifacts[keep]
@@ -886,12 +1029,12 @@ CohortPipeline <- R6::R6Class(
     }
   ),
   private = list(
-    base_dt        = NULL,
-    nodes          = NULL,
-    schemas        = NULL,
-    auto_validate  = FALSE,
-    cache_file     = NULL,
-    base_dt_hash   = NULL,
+    base_dt = NULL,
+    nodes = NULL,
+    schemas = NULL,
+    auto_validate = FALSE,
+    cache_file = NULL,
+    base_dt_hash = NULL,
 
     # Install dt as the shared base table and create the root cohort.
     # Called from the constructor; not part of the public API.
@@ -901,29 +1044,33 @@ CohortPipeline <- R6::R6Class(
       n <- nrow(private$base_dt)
       private$nodes <- list(
         root = list(
-          parent              = NA_character_,
-          label               = label,
-          status              = integer(n),                      # all 0L (included)
-          branched_at_status  = integer(n),
-          log_entries         = list(),
+          parent = NA_character_,
+          label = label,
+          status = integer(n), # all 0L (included)
+          branched_at_status = integer(n),
+          log_entries = list(),
           branched_at_log_len = 0L,
-          branched_at_n       = n,
-          artifacts           = list(),
-          frozen              = FALSE,
-          replay_cursor       = 0L
+          branched_at_n = n,
+          artifacts = list(),
+          frozen = FALSE,
+          replay_cursor = 0L
         )
       )
     },
 
     # Read-only access to the shared base table for plotting helpers.
     get_base_dt = function() private$base_dt,
-    get_nodes   = function() private$nodes,
+    get_nodes = function() private$nodes,
 
     # Names of leaf cohorts (cohorts with no children).
     leaf_cohorts = function() {
-      parents <- vapply(private$nodes, function(n) {
-        if (is.null(n$parent) || is.na(n$parent)) NA_character_ else n$parent
-      }, character(1L))
+      parents <- vapply(
+        private$nodes,
+        function(n) {
+          if (is.null(n$parent) || is.na(n$parent)) NA_character_ else n$parent
+        },
+        character(1L)
+      )
       has_child <- names(private$nodes) %in% parents
       names(private$nodes)[!has_child]
     },
@@ -937,7 +1084,7 @@ CohortPipeline <- R6::R6Class(
       }
       panels <- list()
       for (co in cohorts) {
-        path <- private$ancestor_path(co)  # root-first character vector
+        path <- private$ancestor_path(co) # root-first character vector
         names(path) <- vapply(path, label_of, character(1L))
         panels[[label_of(co)]] <- path
       }
@@ -964,9 +1111,13 @@ CohortPipeline <- R6::R6Class(
       while (length(to_check) > 0L) {
         next_check <- character()
         for (cur in to_check) {
-          kids <- vapply(private$nodes, function(n) {
-            !is.na(n$parent) && identical(n$parent, cur)
-          }, logical(1L))
+          kids <- vapply(
+            private$nodes,
+            function(n) {
+              !is.na(n$parent) && identical(n$parent, cur)
+            },
+            logical(1L)
+          )
           kids <- names(private$nodes)[kids]
           result <- c(result, kids)
           next_check <- c(next_check, kids)
@@ -1003,7 +1154,7 @@ CohortPipeline <- R6::R6Class(
       if (n_own_keep > 0L) {
         for (i in seq_len(n_own_keep)) {
           step_idx <- node$branched_at_log_len + i
-          entry    <- node$log_entries[[step_idx]]
+          entry <- node$log_entries[[step_idx]]
           included_idx <- which(status == 0L)
           if (length(included_idx) > 0L) {
             expr <- parse(text = entry$expr_str)[[1L]]
@@ -1014,10 +1165,10 @@ CohortPipeline <- R6::R6Class(
           }
         }
       }
-      node$status        <- status
-      node$artifacts     <- list()
+      node$status <- status
+      node$artifacts <- list()
       node$artifact_meta <- list()
-      node$frozen        <- FALSE
+      node$frozen <- FALSE
       node$replay_cursor <- cursor
       private$nodes[[branch]] <- node
 

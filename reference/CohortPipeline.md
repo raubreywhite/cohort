@@ -512,7 +512,10 @@ steps and artifacts.
 
 #### Returns
 
-A `data.table` with one row per cohort.
+A `data.table` with one row per cohort and columns `name`, `parent`,
+`n_total`, `n_included`, `n_excluded`, `n_own_steps`, `n_artifacts`,
+`frozen`. An empty pipeline returns a zero-row table carrying those same
+columns.
 
 ------------------------------------------------------------------------
 
@@ -532,7 +535,7 @@ Names of cached artifacts attached to a cohort.
 
 #### Returns
 
-Character vector.
+Character vector. `character(0)` when the cohort has no artifacts.
 
 ------------------------------------------------------------------------
 

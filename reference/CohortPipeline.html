@@ -507,7 +507,10 @@ exclusion steps and artifacts.</p><div class="section">
 <p></p><div class="r"><div class="sourceCode"><pre><code><span><span class="va">CohortPipeline</span><span class="op">$</span><span class="fu">list_cohorts</span><span class="op">(</span><span class="op">)</span></span></code></pre></div><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-13">Returns<a class="anchor" aria-label="anchor" href="#returns-13"></a></h4>
-<p>A <code>data.table</code> with one row per cohort.</p>
+<p>A <code>data.table</code> with one row per cohort and columns
+<code>name</code>, <code>parent</code>, <code>n_total</code>, <code>n_included</code>, <code>n_excluded</code>,
+<code>n_own_steps</code>, <code>n_artifacts</code>, <code>frozen</code>. An empty pipeline
+returns a zero-row table carrying those same columns.</p>
 </div>
 
 </div>
@@ -526,7 +529,8 @@ exclusion steps and artifacts.</p><div class="section">
 </dl><p></p></div>
 </div><p></p><div class="section">
 <h4 id="returns-14">Returns<a class="anchor" aria-label="anchor" href="#returns-14"></a></h4>
-<p>Character vector.</p>
+<p>Character vector. <code>character(0)</code> when the cohort has no
+artifacts.</p>
 </div>
 
 </div>

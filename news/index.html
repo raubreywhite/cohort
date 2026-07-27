@@ -41,6 +41,16 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="2026.7.27" id="version-2026727">Version 2026.7.27<a class="anchor" aria-label="anchor" href="#version-2026727"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-2026-7-27">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-7-27"></a></h3>
+<ul><li>
+<code>$list_artifacts()</code> now returns <code>character(0)</code> for a cohort with no artifacts. It previously returned <code>NULL</code>, which broke the documented “character vector” contract and any caller indexing the result.</li>
+<li>
+<code>$list_cohorts()</code> on an empty pipeline now returns a zero-row <code>data.table</code> carrying the eight documented columns (<code>name</code>, <code>parent</code>, <code>n_total</code>, <code>n_included</code>, <code>n_excluded</code>, <code>n_own_steps</code>, <code>n_artifacts</code>, <code>frozen</code>). It previously returned a zero-row, zero-column table, so column access on an empty pipeline failed. This matches <code>$consort()</code>, which already returned a typed empty table.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="2026.6.23" id="version-2026623">Version 2026.6.23<a class="anchor" aria-label="anchor" href="#version-2026623"></a></h2>
 <div class="section level3">
 <h3 id="bug-fixes-2026-6-23">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-6-23"></a></h3>

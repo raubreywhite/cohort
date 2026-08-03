@@ -1,3 +1,18 @@
+# Version 2026.8.3
+
+## Documentation
+
+Documentation only. No behaviour changed, and no runtime message,
+warning or error string changed.
+
+- `index.md` is now listed in `.Rbuildignore`, so the pkgdown home page
+  body no longer ships in the source tarball. It is not a file `R CMD
+  check` recognises, and `--as-cran` raised "Non-standard file/directory
+  found at top level: 'index.md'" on every run.
+- `?CohortPipeline` now carries a `\seealso` naming `vignette("cohort")`
+  and saying what the vignette works through: branching, cached
+  artifacts, schemas and CONSORT diagrams.
+
 # Version 2026.7.27
 
 ## Bug fixes

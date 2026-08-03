@@ -105,6 +105,9 @@
 #' cp$consort()
 #' cp$get_artifact("adults_female", "mean_age")
 #'
+#' @seealso `vignette("cohort")` for a worked example that branches a cohort,
+#'   caches derived artifacts, declares a column schema and draws a CONSORT
+#'   diagram.
 #' @import data.table
 #' @import R6
 #' @importFrom digest digest

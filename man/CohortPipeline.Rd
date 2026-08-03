@@ -124,6 +124,11 @@ cp$consort()
 cp$get_artifact("adults_female", "mean_age")
 
 }
+\seealso{
+\code{vignette("cohort")} for a worked example that branches a cohort,
+caches derived artifacts, declares a column schema and draws a CONSORT
+diagram.
+}
 \section{Methods}{
 \subsection{Public methods}{
   \itemize{

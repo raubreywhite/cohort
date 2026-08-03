@@ -14,3 +14,5 @@
 ^\.DS_Store$
 ^cohort_pipeline_proposal\.html$
 ^_pkgdown\.yml$
+^index\.md$
+^Rplots\.pdf$

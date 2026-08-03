@@ -100,6 +100,12 @@ treated as `FALSE` (rows are kept). The original string is stored
 verbatim in the exclusion log, which keeps cohort definitions
 serializable and auditable.
 
+## See also
+
+[`vignette("cohort")`](https://www.rwhite.no/cohort/articles/cohort.md)
+for a worked example that branches a cohort, caches derived artifacts,
+declares a column schema and draws a CONSORT diagram.
+
 ## Methods
 
 ### Public methods

@@ -11,7 +11,7 @@ We start with a small simulated dataset.
 
 ``` r
 library(cohort)
-#> cohort 2026.6.23
+#> cohort 2026.8.3
 #> https://www.rwhite.no/cohort/
 library(data.table)
 #> 

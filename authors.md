@@ -2,8 +2,8 @@
 
 ## Authors
 
-- **[Richard Aubrey White](https://www.rwhite.no)**. Author, maintainer.
-  [](https://orcid.org/0000-0002-6747-1726)
+- **[Richard Aubrey White](https://www.rwhite.no)**. Author, maintainer,
+  copyright holder. [](https://orcid.org/0000-0002-6747-1726)
 
 ## Citation
 

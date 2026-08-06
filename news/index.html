@@ -43,6 +43,14 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="2026.8.6" id="version-202686">Version 2026.8.6<a class="anchor" aria-label="anchor" href="#version-202686"></a></h2>
 <div class="section level3">
+<h3 id="licensing-2026-8-6">Licensing<a class="anchor" aria-label="anchor" href="#licensing-2026-8-6"></a></h3>
+<ul><li>
+<code>DESCRIPTION</code> <code>Authors@R</code> now declares <strong>Richard Aubrey White</strong> as the copyright holder, with <code>role = "cph"</code>. It declared none at all, and neither did any other package in the fleet. Nothing in <code>R CMD check</code> reports that.</li>
+<li>The copyright year is unchanged at 2026, and is now confirmed correct.</li>
+<li>
+<code>CLAUDE.md</code> now carries a Licensing section, so the year gets checked rather than silently ageing.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="bug-fixes-2026-8-6">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-8-6"></a></h3>
 <ul><li>The <code>README.md</code> quick start could not run. It called <code>cp$load(d)</code>, and <code>load</code> is not a public method: the class exposes 21 methods and <code>load</code> is not among them. Data enters through <code>CohortPipeline$new(dt)</code>. The example now reads <code>CohortPipeline$new(d)</code>.</li>
 <li>The same example printed the wrong numbers. Six rows survive the three root exclusions, and four of them are male, so <code>Not female</code> excludes four and leaves two. The README claimed one excluded and five included. Both the print block and the consort table now carry output captured from a real run.</li>

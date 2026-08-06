@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">cohort</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2026.8.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2026.8.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,6 +41,18 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="2026.8.6" id="version-202686">Version 2026.8.6<a class="anchor" aria-label="anchor" href="#version-202686"></a></h2>
+<div class="section level3">
+<h3 id="bug-fixes-2026-8-6">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-8-6"></a></h3>
+<ul><li>The <code>README.md</code> quick start could not run. It called <code>cp$load(d)</code>, and <code>load</code> is not a public method: the class exposes 21 methods and <code>load</code> is not among them. Data enters through <code>CohortPipeline$new(dt)</code>. The example now reads <code>CohortPipeline$new(d)</code>.</li>
+<li>The same example printed the wrong numbers. Six rows survive the three root exclusions, and four of them are male, so <code>Not female</code> excludes four and leaves two. The README claimed one excluded and five included. Both the print block and the consort table now carry output captured from a real run.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-2026-8-6">Documentation<a class="anchor" aria-label="anchor" href="#documentation-2026-8-6"></a></h3>
+<ul><li>All roxygen prose in <code>R/cohort_pipeline.R</code>, plus <code>vignettes/cohort.Rmd</code>, <code>README.md</code> and <code>index.md</code>, now follows ASD-STE100 (Simplified Technical English). Every sentence in those four files runs to 25 words or fewer. The change splits long sentences, prefers the active voice, and removes idiom.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="2026.8.3" id="version-202683">Version 2026.8.3<a class="anchor" aria-label="anchor" href="#version-202683"></a></h2>
 <div class="section level3">
 <h3 id="documentation-2026-8-3">Documentation<a class="anchor" aria-label="anchor" href="#documentation-2026-8-3"></a></h3>
@@ -48,14 +60,10 @@
 <ul><li>
 <code>index.md</code> is now listed in <code>.Rbuildignore</code>, so the pkgdown home page body no longer ships in the source tarball. It is not a file <code>R CMD   check</code> recognises, and <code>--as-cran</code> raised “Non-standard file/directory found at top level: ‘index.md’” on every run.</li>
 <li>
-<code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code> now carries a <code>\seealso</code> naming <code><a href="../articles/cohort.html">vignette("cohort")</a></code> and saying what the vignette works through: branching, cached artifacts, schemas and CONSORT diagrams.</li>
-<li>All roxygen prose in <code>R/cohort_pipeline.R</code>, plus <code>vignettes/cohort.Rmd</code>, <code>README.md</code> and <code>index.md</code>, now follows ASD-STE100 (Simplified Technical English). Every sentence in those four files runs to 25 words or fewer. The change splits long sentences, prefers the active voice, and removes idiom.</li>
+<code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code> now carries a <code>\seealso</code> naming <code><a href="../articles/cohort.html">vignette("cohort")</a></code> and saying what the vignette works through: branching, cached artifacts, schemas and CONSORT diagrams. # Version 2026.7.27</li>
 </ul></div>
-</div>
-    <div class="section level2">
-<h2 class="pkg-version" data-toc-text="2026.7.27" id="version-2026727">Version 2026.7.27<a class="anchor" aria-label="anchor" href="#version-2026727"></a></h2>
 <div class="section level3">
-<h3 id="bug-fixes-2026-7-27">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-7-27"></a></h3>
+<h3 id="bug-fixes-2026-8-3">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-2026-8-3"></a></h3>
 <ul><li>
 <code>$list_artifacts()</code> now returns <code>character(0)</code> for a cohort with no artifacts. It previously returned <code>NULL</code>, which broke the documented “character vector” contract and any caller indexing the result.</li>
 <li>

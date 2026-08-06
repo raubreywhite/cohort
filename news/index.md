@@ -1,5 +1,27 @@
 # Changelog
 
+## Version 2026.8.6
+
+### Bug fixes
+
+- The `README.md` quick start could not run. It called `cp$load(d)`, and
+  `load` is not a public method: the class exposes 21 methods and `load`
+  is not among them. Data enters through `CohortPipeline$new(dt)`. The
+  example now reads `CohortPipeline$new(d)`.
+- The same example printed the wrong numbers. Six rows survive the three
+  root exclusions, and four of them are male, so `Not female` excludes
+  four and leaves two. The README claimed one excluded and five
+  included. Both the print block and the consort table now carry output
+  captured from a real run.
+
+### Documentation
+
+- All roxygen prose in `R/cohort_pipeline.R`, plus
+  `vignettes/cohort.Rmd`, `README.md` and `index.md`, now follows
+  ASD-STE100 (Simplified Technical English). Every sentence in those
+  four files runs to 25 words or fewer. The change splits long
+  sentences, prefers the active voice, and removes idiom.
+
 ## Version 2026.8.3
 
 ### Documentation
@@ -15,14 +37,7 @@ warning or error string changed.
   now carries a `\seealso` naming
   [`vignette("cohort")`](https://www.rwhite.no/cohort/articles/cohort.md)
   and saying what the vignette works through: branching, cached
-  artifacts, schemas and CONSORT diagrams.
-- All roxygen prose in `R/cohort_pipeline.R`, plus
-  `vignettes/cohort.Rmd`, `README.md` and `index.md`, now follows
-  ASD-STE100 (Simplified Technical English). Every sentence in those
-  four files runs to 25 words or fewer. The change splits long
-  sentences, prefers the active voice, and removes idiom.
-
-## Version 2026.7.27
+  artifacts, schemas and CONSORT diagrams. \# Version 2026.7.27
 
 ### Bug fixes
 

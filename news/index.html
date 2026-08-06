@@ -49,6 +49,7 @@
 <code>index.md</code> is now listed in <code>.Rbuildignore</code>, so the pkgdown home page body no longer ships in the source tarball. It is not a file <code>R CMD   check</code> recognises, and <code>--as-cran</code> raised “Non-standard file/directory found at top level: ‘index.md’” on every run.</li>
 <li>
 <code><a href="../reference/CohortPipeline.html">?CohortPipeline</a></code> now carries a <code>\seealso</code> naming <code><a href="../articles/cohort.html">vignette("cohort")</a></code> and saying what the vignette works through: branching, cached artifacts, schemas and CONSORT diagrams.</li>
+<li>All roxygen prose in <code>R/cohort_pipeline.R</code>, plus <code>vignettes/cohort.Rmd</code>, <code>README.md</code> and <code>index.md</code>, now follows ASD-STE100 (Simplified Technical English). Every sentence in those four files runs to 25 words or fewer. The change splits long sentences, prefers the active voice, and removes idiom.</li>
 </ul></div>
 </div>
     <div class="section level2">

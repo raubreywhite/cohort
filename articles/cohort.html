@@ -77,11 +77,11 @@
 
     
     
-<p><code>cohort</code> provides the <code>CohortPipeline</code> R6 class
-for building analytic cohorts with full provenance. Cohort construction
-is kept strictly upstream of analysis: the pipeline produces analytic
-data tables, then hands them off to whatever consumes them
-downstream.</p>
+<p><code>cohort</code> provides one R6 class,
+<code>CohortPipeline</code>. It builds analytic cohorts with full
+provenance. Cohort construction stays strictly upstream of analysis. The
+pipeline produces analytic data tables, then hands them to whatever
+consumes them downstream.</p>
 <div class="section level2">
 <h2 id="a-worked-example">A worked example<a class="anchor" aria-label="anchor" href="#a-worked-example"></a>
 </h2>
@@ -116,29 +116,29 @@ downstream.</p>
 <span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit</a></span><span class="op">(</span><span class="va">cp</span><span class="op">$</span><span class="fu">save</span><span class="op">(</span><span class="op">)</span>, add <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <p><code>CohortPipeline$new()</code> makes a defensive copy of
-<code>d</code> once. The user’s data table is never mutated, no matter
-what subsequent operations you run on the pipeline.</p>
+<code>d</code> once. The pipeline never mutates your data table,
+whatever operations you run on it.</p>
 <p>The <code>cache_file</code> argument enables incremental
-re-execution: on the first run a snapshot is written to disk; on
-subsequent runs the snapshot is restored and matching operations replay
-instantly without recomputation. The <code>label</code> argument is the
-cohort’s display label in CONSORT diagrams (defaults to
-<code>"Cohort participants"</code>); the identifier <code>"root"</code>
-is universal and always used in code.</p>
+re-execution. On the first run the pipeline writes a snapshot to disk.
+On later runs it restores the snapshot, and matching operations replay
+instantly with no recomputation. The <code>label</code> argument is the
+cohort’s display label in CONSORT diagrams, and defaults to
+<code>"Cohort participants"</code>. The identifier <code>"root"</code>
+is universal, and code always uses it.</p>
 </div>
 <div class="section level3">
 <h3 id="step-2-apply-root-level-exclusions">Step 2: apply root-level exclusions<a class="anchor" aria-label="anchor" href="#step-2-apply-root-level-exclusions"></a>
 </h3>
 <p>Every exclusion takes a human-readable reason and an R expression as
-a string. The string is parsed and evaluated against the rows currently
-included on the branch.</p>
+a string. The pipeline parses the string and evaluates it against the
+rows currently included on the branch.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing sex"</span>, <span class="st">"is.na(sex)"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Missing age"</span>, <span class="st">"is.na(age)"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"root"</span>, <span class="st">"Under 18"</span>,    <span class="st">"age &lt; 18"</span><span class="op">)</span></span></code></pre></div>
-<p><code>NA</code> predicate results are treated as <code>FALSE</code>
-(rows are kept) so you can write predicates without defensive
-<code>!is.na(...)</code> clauses for every column.</p>
+<p>The pipeline treats <code>NA</code> predicate results as
+<code>FALSE</code> and keeps those rows. You therefore do not need a
+defensive <code>!is.na(...)</code> clause for every column.</p>
 </div>
 <div class="section level3">
 <h3 id="step-3-branch-into-sub-cohorts">Step 3: branch into sub-cohorts<a class="anchor" aria-label="anchor" href="#step-3-branch-into-sub-cohorts"></a>
@@ -150,11 +150,10 @@ included on the branch.</p>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">new_cohort</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, from <span class="op">=</span> <span class="st">"root"</span>,</span>
 <span>              label <span class="op">=</span> <span class="st">"Adults, group A"</span><span class="op">)</span></span>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">exclude_and_track</span><span class="op">(</span><span class="st">"adults_grp_a"</span>, <span class="st">"Group not a"</span>, <span class="st">"grp != 'a'"</span><span class="op">)</span></span></code></pre></div>
-<p>Identifiers (<code>"adults_female"</code>,
-<code>"adults_grp_a"</code>) are what your code references; labels are
-what shows up in figures. Re-issuing <code>new_cohort()</code> with a
-different label silently updates the label without invalidating the
-cache.</p>
+<p>Your code references identifiers (<code>"adults_female"</code>,
+<code>"adults_grp_a"</code>). Figures show labels. Call
+<code>new_cohort()</code> again with a different label. The pipeline
+updates the label silently and does not invalidate the cache.</p>
 <p>A branch starts identical to its parent at the moment of branching.
 Sibling branches evolve independently.</p>
 </div>
@@ -166,11 +165,11 @@ Sibling branches evolve independently.</p>
 <li>another cohort branches from it, or</li>
 <li>an artifact is set on it.</li>
 </ol>
-<p>After freezing, <code>$exclude_and_track()</code> on that cohort
+<p>After a cohort freezes, <code>$exclude_and_track()</code> on it
 errors. The rule guarantees that a cohort’s name maps to one definition
-forever: once children depend on it, its exclusion list is fixed. The
-practical workflow is “apply all exclusions on a cohort, then branch
-from it or attach artifacts.” Multi-way forks are unaffected — you can
+forever. Once children depend on a cohort, its exclusion list is fixed.
+The practical workflow is: apply all exclusions on a cohort, then branch
+from it or attach artifacts. Multi-way forks are unaffected. You can
 branch a frozen cohort as many times as you like.</p>
 </div>
 <div class="section level3">
@@ -178,8 +177,8 @@ branch a frozen cohort as many times as you like.</p>
 </h3>
 <p><code>set_artifact()</code> is for reusable per-cohort objects
 (analytic-ready data tables, summary statistics, baseline tables). Each
-callback receives a copy of the included rows and the named list of
-artifacts already attached to the cohort.</p>
+callback receives a copy of the included rows. It also receives the
+named list of artifacts already attached to the cohort.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="st">"dt_for_analysis"</span>,</span>
 <span>  from <span class="op">=</span> <span class="st">"adults_female"</span>,</span>
@@ -192,9 +191,9 @@ artifacts already attached to the cohort.</p>
 <span>  <span class="op">}</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Each <code>set_artifact()</code> callback receives a <em>fresh</em>
-copy of the cohort’s included rows — it does not see modifications made
-by previous artifacts. To chain derivations, read the previous artifact
-off the <code>sib</code> argument:</p>
+copy of the cohort’s included rows. It does not see changes that
+previous artifacts made. To chain derivations, read the previous
+artifact from the <code>sib</code> argument:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">set_artifact</span><span class="op">(</span><span class="st">"baseline_table"</span>,</span>
 <span>  from <span class="op">=</span> <span class="st">"adults_female"</span>,</span>
@@ -236,14 +235,14 @@ off the <code>sib</code> argument:</p>
 <span><span class="co">#&gt; 5:  adults_grp_a   root     4 Group not a grp != 'a'         93          88</span></span></code></pre></div>
 <p><code>$consort()</code> returns a long-form table — one row per
 exclusion step, across every branch. Each branch contributes only its
-own steps; steps inherited from a parent at branch time are reported
-under the parent.</p>
+own steps. A step that a branch inherits from its parent appears under
+the parent.</p>
 </div>
 <div class="section level3">
 <h3 id="step-6-hand-off-downstream">Step 6: hand off downstream<a class="anchor" aria-label="anchor" href="#step-6-hand-off-downstream"></a>
 </h3>
-<p>Cached artifacts are plain R objects — pull them out with
-<code>$get_artifact()</code> and pass them to whatever consumes the
+<p>Cached artifacts are plain R objects. Read them with
+<code>$get_artifact()</code>, then pass them to whatever consumes the
 analytic data.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">analytic_dt</span> <span class="op">&lt;-</span> <span class="va">cp</span><span class="op">$</span><span class="fu">get_artifact</span><span class="op">(</span><span class="st">"adults_female"</span>, <span class="st">"dt_for_analysis"</span><span class="op">)</span></span>
@@ -282,18 +281,18 @@ it before downstream code consumes the data.</p>
 <span><span class="va">cp</span><span class="op">$</span><span class="fu">validate</span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [validate] All CohortPipeline schemas passed</span></span></code></pre></div>
 <p>If a column is missing, has the wrong type, or carries unexpected
-<code>NA</code>s, <code>$validate()</code> throws a single error listing
+<code>NA</code>s, <code>$validate()</code> throws one error that lists
 every problem. Pass <code>auto_validate = TRUE</code> to
-<code>CohortPipeline$new()</code> to fail at the failure site (every
-<code>$new_cohort()</code> and <code>$set_artifact()</code> call
-validates after).</p>
+<code>CohortPipeline$new()</code> to fail at the failure site. Every
+<code>$new_cohort()</code> and <code>$set_artifact()</code> call then
+validates after it runs.</p>
 </div>
 <div class="section level2">
 <h2 id="consort-diagrams">CONSORT diagrams<a class="anchor" aria-label="anchor" href="#consort-diagrams"></a>
 </h2>
 <p>The simplest way to draw CONSORT diagrams is <code>$plot()</code>.
-With no arguments it renders one panel per cohort, walking the
-root-to-cohort path; cohort names become box labels.</p>
+With no arguments it renders one panel per cohort. Each panel walks the
+root-to-cohort path, and cohort names become box labels.</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cp</span><span class="op">$</span><span class="fu">plot</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="cohort_files/figure-html/consort-1.png" class="r-plt" alt="" width="85%" style="display: block; margin: auto;"></p>
@@ -311,9 +310,9 @@ use <code>$draw_consort_panels()</code> (see
 <div class="section level2">
 <h2 id="how-the-cache-decides-what-to-recompute">How the cache decides what to recompute<a class="anchor" aria-label="anchor" href="#how-the-cache-decides-what-to-recompute"></a>
 </h2>
-<p>The worked example above already uses <code>cache_file</code> and
+<p>The worked example already uses <code>cache_file</code> and
 <code>on.exit(cp$save())</code>. On the second run of the same script,
-every operation is checked against the cached log:</p>
+the pipeline checks every operation against the cached log.</p>
 <table class="table">
 <thead><tr class="header">
 <th>Method</th>
@@ -339,22 +338,23 @@ every operation is checked against the cached log:</p>
 </tbody>
 </table>
 <p>A match advances the replay cursor with no work done. A mismatch
-truncates the log at that point, drops downstream artifacts, cascades to
-descendant cohorts whose inherited prefix is now stale, and recomputes
-only what changed. Labels are presentation, not part of the cache key,
-so re-issuing
+truncates the log at that point and drops downstream artifacts. It also
+cascades to descendant cohorts whose inherited prefix is now stale. It
+then recomputes only what changed. Labels are presentation, not part of
+the cache key. Call
 <code>new_cohort("adults_female", from = "root", label = "Adult women")</code>
-updates the label without invalidating anything.</p>
-<p>For <code>set_artifact</code>, prefer the 3-argument signature
-<code>function(dt, sib, argset)</code>: data dependencies in
-<code>argset</code> participate in the cache key, so changing
+again, and the pipeline updates the label. It invalidates nothing.</p>
+<p>For <code>set_artifact</code>, you SHOULD use the 3-argument
+signature <code>function(dt, sib, argset)</code>. Data dependencies in
+<code>argset</code> participate in the cache key. A change from
 <code>argset = list(washout = 84L)</code> to <code>washout = 90L</code>
-triggers a recompute. The 2-argument form <code>function(dt, sib)</code>
-still works but won’t catch closure-captured changes.</p>
-<p>The cache key uses <code>body(fn)</code> literally; if
+therefore triggers a recompute. The 2-argument form
+<code>function(dt, sib)</code> still works. It does not catch
+closure-captured changes.</p>
+<p>The cache key uses <code>body(fn)</code> literally. If
 <code>fn</code> calls a helper that you change, the cache cannot detect
-that. Either include a version tag in <code>argset</code>, or call
-<code>cp$invalidate(cohort)</code> to drop the cohort and force
+the change. Either include a version tag in <code>argset</code>, or call
+<code>cp$invalidate(cohort)</code> to drop the cohort and force a
 recompute.</p>
 </div>
 <div class="section level2">
@@ -401,11 +401,11 @@ input data table or another branch.</p>
 values themselves are stored once and shared across the tree.</li>
 <li>
 <code>$exclude_and_track()</code> evaluates the predicate against
-the included subset only; predicates may safely assume earlier
-exclusions have already removed invalid rows.</li>
-<li>The exclusion log is accumulated as a list and materialized as a
+the included subset only. A predicate can therefore assume that earlier
+exclusions already removed invalid rows.</li>
+<li>The exclusion log accumulates as a list. It materializes as a
 <code>data.table</code> only on read (<code>$consort()</code>,
-<code>$list_cohorts()</code>), avoiding quadratic <code>rbind</code>
+<code>$list_cohorts()</code>). That avoids quadratic <code>rbind</code>
 growth.</li>
 </ul>
 </div>

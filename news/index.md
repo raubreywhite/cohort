@@ -16,6 +16,11 @@ warning or error string changed.
   [`vignette("cohort")`](https://www.rwhite.no/cohort/articles/cohort.md)
   and saying what the vignette works through: branching, cached
   artifacts, schemas and CONSORT diagrams.
+- All roxygen prose in `R/cohort_pipeline.R`, plus
+  `vignettes/cohort.Rmd`, `README.md` and `index.md`, now follows
+  ASD-STE100 (Simplified Technical English). Every sentence in those
+  four files runs to 25 words or fewer. The change splits long
+  sentences, prefers the active voice, and removes idiom.
 
 ## Version 2026.7.27
 

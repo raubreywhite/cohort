@@ -2,23 +2,24 @@
 #'
 #' @description
 #' `CohortPipeline` builds analytic cohorts as a tree of named branches with
-#' full exclusion provenance. Each branch derives from a parent branch by
-#' applying a sequence of named exclusion rules. Every exclusion is
-#' recorded -- its reason, the predicate that produced it, the number of
-#' subjects affected -- so the resulting object can drive a CONSORT diagram
-#' and serve as the auditable record of how the analytic dataset was
-#' constructed.
+#' full exclusion provenance. Each branch derives from a parent branch. It
+#' applies a sequence of named exclusion rules to that parent. The class
+#' records every exclusion. Each record holds the reason, the predicate that
+#' produced it, and the number of subjects affected. The object can
+#' therefore drive a CONSORT diagram. It is also the auditable record of how
+#' the analytic dataset was constructed.
 #'
-#' Cohort construction is kept strictly upstream of analysis: the class
+#' Cohort construction stays strictly upstream of analysis. The class
 #' produces analytic data tables that downstream code can consume. See
 #' `vignette("cohort", package = "cohort")` for a worked example.
 #'
 #' @section Storage strategy:
-#' A `CohortPipeline` stores a single shared base data table and, for each
-#' branch, a small per-row integer status vector identifying which rows are
-#' included and which step excluded them. Branching is therefore O(n) in
-#' the number of rows of the base table and never copies the data values,
-#' so deep cohort trees stay flat in memory.
+#' A `CohortPipeline` stores one shared base data table. For each branch it
+#' also stores a small integer status vector, with one entry per row. The
+#' vector identifies which rows are included, and which step excluded the
+#' other rows. Branching is therefore O(n) in the number of rows of the base
+#' table. Branching never copies the data values, so deep cohort trees stay
+#' flat in memory.
 #'
 #' @section Freeze rule:
 #' A cohort becomes **frozen** the first time either:
@@ -26,22 +27,22 @@
 #' 1. another cohort branches from it (via `$new_cohort(from = X)`), or
 #' 2. an artifact is set on it (via `$set_artifact(from = X)`).
 #'
-#' After freezing, `$exclude_and_track()` on that cohort errors. The rule
-#' guarantees that a cohort's name maps to exactly one definition forever:
-#' once children depend on it, its exclusion list is fixed, and any
+#' After a cohort freezes, `$exclude_and_track()` on it errors. The rule
+#' guarantees that a cohort's name maps to exactly one definition forever.
+#' Once children depend on a cohort, its exclusion list is fixed. Any
 #' cached artifact stays consistent with the included rows that produced
-#' it. The practical workflow is "apply all exclusions on a cohort, then
-#' branch from it or attach artifacts." Multi-way forks are unaffected:
-#' you can branch a frozen cohort as many times as you like.
+#' it. The practical workflow is: apply all exclusions on a cohort, then
+#' branch from it or attach artifacts. Multi-way forks are unaffected. You
+#' can branch a frozen cohort as many times as you like.
 #'
 #' @section Mutation contract:
 #' - `CohortPipeline$new(dt)` makes a defensive copy of `dt` once. The
-#'   user's data table is never modified.
+#'   class never modifies the user's data table.
 #' - `$get_included(cohort)` returns an independent copy. The caller may
-#'   mutate it freely without affecting any other cohort or the shared
-#'   base table.
-#' - The data table passed to a `$set_artifact()` callback is always an
-#'   independent copy. Callbacks may mutate it freely.
+#'   mutate it freely. The change does not affect any other cohort or the
+#'   shared base table.
+#' - `$set_artifact()` always passes an independent copy of the data table
+#'   to the callback. The callback may mutate it freely.
 #' - `$get_everyone(cohort)` returns an independent copy with a
 #'   `.cohort_status` column reconstructed from the branch's status
 #'   vector.
@@ -60,7 +61,8 @@
 #'   `.cohort_status` column.
 #' - `$get_artifact(cohort, name)` -- retrieve a cached artifact.
 #' - `$n_included(cohort)`, `$n_total()` -- row counts.
-#' - `$list_cohorts()`, `$list_artifacts(cohort)`, `$list_schemas()`
+#' - `$list_cohorts()`, `$list_artifacts(cohort)`, `$list_schemas()` --
+#'   inventories.
 #' - `$declare_schema(branch, schema, from)`, `$validate()` -- column
 #'   contracts.
 #' - `$consort()` -- long-form exclusion log across all branches.
@@ -70,13 +72,13 @@
 #' - `$print()` -- concise text summary of the cohort tree.
 #'
 #' @section Predicate strings:
-#' Exclusion predicates are passed as strings (`expr_str`) and parsed with
-#' `parse(text = expr_str)`. The string is evaluated against the included
-#' subset of the base table, so predicates may safely assume that earlier
-#' exclusions have already removed invalid rows. `NA` predicate results
-#' are treated as `FALSE` (rows are kept). The original string is stored
-#' verbatim in the exclusion log, which keeps cohort definitions
-#' serializable and auditable.
+#' You pass exclusion predicates as strings (`expr_str`). The class parses
+#' each string with `parse(text = expr_str)`. It evaluates the string
+#' against the included subset of the base table. A predicate can therefore
+#' assume that earlier exclusions already removed invalid rows. The class
+#' treats `NA` predicate results as `FALSE`, so it keeps those rows. The
+#' exclusion log stores the original string verbatim. Cohort definitions
+#' therefore stay serializable and auditable.
 #'
 #' @examples
 #' library(data.table)
@@ -118,27 +120,28 @@ CohortPipeline <- R6::R6Class(
   public = list(
     #' @description
     #' Create a new `CohortPipeline`. If `cache_file` is set and the file
-    #' exists, the pipeline is restored from that snapshot and `dt` is
-    #' used only as a sanity check (its dimensions and column names must
-    #' match the cached base table). Otherwise `dt` is installed as the
-    #' root cohort.
+    #' exists, the constructor restores the pipeline from that snapshot.
+    #' The constructor then uses `dt` only as a sanity check. Its
+    #' dimensions and column names must match the cached base table.
+    #' Otherwise the constructor installs `dt` as the root cohort.
     #' @param dt A `data.table` to install as the root cohort. Required
     #'   on cold construction; optional on warm cache load.
     #' @param label Optional character. Display label for the root cohort
-    #'   (used in CONSORT diagrams and `list_cohorts()`). Defaults to
-    #'   `"Cohort participants"`. Refreshed silently on warm cache load
-    #'   so changing the label between runs is allowed.
-    #' @param cache_file Optional character path. When supplied, an
-    #'   incremental cache is enabled. If the file exists, the pipeline
-    #'   is restored from it and subsequent operations replay the
-    #'   recorded log on cache hits, recomputing only divergent steps.
-    #'   If the file does not exist, fresh state is built and `$save()`
-    #'   writes to this path. Recommended idiom for scripts:
-    #'   `on.exit(cp$save(), add = TRUE)` near the top.
-    #' @param auto_validate Logical. When `TRUE`, `$validate()` is invoked
-    #'   automatically after every `$new_cohort()` and `$set_artifact()`
-    #'   call so schema mismatches stop at the failure site rather than
-    #'   accumulating until the next manual `$validate()`. Defaults to
+    #'   (used in CONSORT diagrams and `$list_cohorts()`). Defaults to
+    #'   `"Cohort participants"`. A warm cache load refreshes the label
+    #'   silently, so you may change the label between runs.
+    #' @param cache_file Optional character path. When you supply a path,
+    #'   the pipeline enables an incremental cache. If the file exists,
+    #'   the constructor restores the pipeline from it. Subsequent
+    #'   operations then replay the recorded log on cache hits, and only
+    #'   divergent steps recompute. If the file does not exist, the
+    #'   constructor builds fresh state, and `$save()` writes to this
+    #'   path. In a script, put `on.exit(cp$save(), add = TRUE)` near the
+    #'   top.
+    #' @param auto_validate Logical. When `TRUE`, the pipeline calls
+    #'   `$validate()` after every `$new_cohort()` and `$set_artifact()`
+    #'   call. A schema mismatch then stops at the failure site. It does
+    #'   not accumulate until the next manual `$validate()`. Defaults to
     #'   `FALSE`.
     #' @return A new `CohortPipeline` instance.
     initialize = function(
@@ -207,18 +210,18 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Declare a column-type / level / NA contract for a branch. Validation
-    #' runs only when `$validate()` is called (or automatically when the
-    #' pipeline was constructed with `auto_validate = TRUE`).
+    #' runs only when you call `$validate()`. With `auto_validate = TRUE`
+    #' at construction, the pipeline calls `$validate()` for you.
     #' @param branch Character. Branch name to attach the schema to.
     #' @param schema Named list. Each element describes one column with
     #'   fields:
     #'   - `type`: one of `"integer"`, `"numeric"`, `"factor"`, `"logical"`,
     #'     `"Date"`, `"character"`.
     #'   - `levels` (factor only): expected `levels()` vector.
-    #'   - `na`: if `FALSE`, the column must contain no `NA`s.
-    #' @param from Optional character. If supplied, the new schema starts
-    #'   as a copy of the schema attached to `from` and the entries in
-    #'   `schema` are merged on top.
+    #'   - `na`: if `FALSE`, the column MUST contain no `NA`s.
+    #' @param from Optional character. If you supply `from`, the new schema
+    #'   starts as a copy of the schema attached to `from`. The entries in
+    #'   `schema` then merge on top.
     #' @return The pipeline (invisibly).
     declare_schema = function(branch, schema = NULL, from = NULL) {
       if (!is.null(from)) {
@@ -246,7 +249,7 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Validate every declared schema against the included rows of its
-    #' branch. Throws an error listing every mismatch found.
+    #' branch. Throws one error that lists every mismatch found.
     #' @return The pipeline (invisibly), if validation passes.
     validate = function() {
       errors <- character()
@@ -342,13 +345,13 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Create a new cohort branched from an existing cohort. The new
-    #' cohort starts identical to its parent at the moment of branching;
-    #' subsequent exclusions in the parent do not propagate to the child.
+    #' cohort starts identical to its parent at the moment of branching.
+    #' Later exclusions in the parent do not propagate to the child.
     #' @param name Character. Name of the new cohort.
     #' @param from Character. Name of the parent cohort.
     #' @param label Optional character. Display label for the cohort
-    #'   (used in CONSORT diagrams and `list_cohorts()`); defaults to
-    #'   `name`. May be refreshed silently across cache replays.
+    #'   (used in CONSORT diagrams and `$list_cohorts()`); defaults to
+    #'   `name`. A cache replay may refresh it silently.
     #' @return The pipeline (invisibly).
     new_cohort = function(name, from, label = NULL) {
       if (!from %in% names(private$nodes)) {
@@ -431,11 +434,11 @@ CohortPipeline <- R6::R6Class(
     },
 
     #' @description
-    #' Apply an exclusion predicate to a cohort and record the result on
-    #' the exclusion log. The predicate is evaluated against the included
-    #' subset of the base table; rows for which the predicate evaluates
-    #' to `TRUE` are excluded with the supplied reason. `NA` predicate
-    #' results are treated as `FALSE`.
+    #' Apply an exclusion predicate to a cohort. Record the result on the
+    #' exclusion log. The method evaluates the predicate against the
+    #' included subset of the base table. It excludes every row where the
+    #' predicate evaluates to `TRUE`, with the supplied reason. The method
+    #' treats `NA` predicate results as `FALSE`.
     #' @param branch Character. Cohort to apply the exclusion to.
     #' @param reason Character. Human-readable reason recorded on the log.
     #' @param expr_str Character. R expression as a string (parsed with
@@ -554,17 +557,17 @@ CohortPipeline <- R6::R6Class(
     #' `fn` may have either the legacy 2-argument signature
     #' `function(dt, sib)` or the 3-argument signature
     #' `function(dt, sib, argset)`. The 3-argument form pairs with the
-    #' `argset` parameter to make the cache contract explicit: the cache
-    #' key is `(name, from, body(fn), argset)`, so the artifact is
-    #' recomputed only when one of those changes. With the 2-argument
-    #' form, `fn` is invoked normally but `argset` is not used in the
-    #' cache key (suitable for one-off scripts; not recommended when
-    #' relying on `cache_file`).
+    #' `argset` parameter to make the cache contract explicit. The cache
+    #' key is `(name, from, body(fn), argset)`. The artifact recomputes
+    #' only when one of those changes. With the 2-argument form, the
+    #' method invokes `fn` normally, but `argset` does not join the cache
+    #' key. Use the 2-argument form for one-off scripts. You SHOULD NOT
+    #' use it together with `cache_file`.
     #'
-    #' Note that the cache key uses `body(fn)` literally; if `fn` calls
-    #' a helper that you change, the cache cannot detect that. Either
-    #' include the helper's output / a version tag in `argset`, or call
-    #' `$invalidate()` to force recompute.
+    #' The cache key uses `body(fn)` literally. If `fn` calls a helper
+    #' that you change, the cache cannot detect the change. Either put
+    #' the helper's output or a version tag in `argset`, or call
+    #' `$invalidate()` to force a recompute.
     #' @param name Character. Artifact name (must be unique on the cohort).
     #' @param from Character. Cohort to attach the artifact to.
     #' @param fn Function with signature `function(dt, sib)` or
@@ -638,9 +641,9 @@ CohortPipeline <- R6::R6Class(
     },
 
     #' @description
-    #' Return an independent copy of the included rows of a cohort. The
-    #' returned `data.table` may be mutated freely without affecting the
-    #' shared base table or any other cohort.
+    #' Return an independent copy of the included rows of a cohort. You
+    #' may mutate the returned `data.table` freely. The change does not
+    #' affect the shared base table or any other cohort.
     #' @param cohort Character. Cohort name.
     #' @return A `data.table`.
     get_included = function(cohort) {
@@ -655,7 +658,7 @@ CohortPipeline <- R6::R6Class(
     #' @description
     #' Return a copy of the full base table with a `.cohort_status` column
     #' reconstructed from this branch's exclusion history. Included rows
-    #' are labeled `"included"`; excluded rows carry the reason of the
+    #' carry the label `"included"`. Excluded rows carry the reason of the
     #' first exclusion that caught them.
     #' @param cohort Character. Cohort name.
     #' @return A `data.table` of the same height as the base table, with
@@ -771,9 +774,9 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Long-form table of exclusion log entries across all cohorts.
-    #' Each cohort contributes only its own exclusion steps (steps
-    #' inherited from the parent at branch time are reported under the
-    #' parent, not duplicated).
+    #' Each cohort contributes only its own exclusion steps. A step that a
+    #' cohort inherits from its parent at branch time appears under the
+    #' parent only. The table does not duplicate it.
     #' @return A `data.table` with columns `branch`, `parent`, `step`,
     #'   `reason`, `expr_str`, `n_excluded`, `n_remaining`.
     consort = function() {
@@ -829,21 +832,23 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Render one or more CONSORT panels for cohort flows. Each panel
-    #' walks a sequence of cohort names, lumping the named cohorts'
+    #' walks a sequence of cohort names. It lumps the named cohorts'
     #' exclusion steps into bullet blocks.
     #'
-    #' Most users want `$plot()` instead, which auto-discovers every
+    #' Most users want `$plot()` instead. `$plot()` auto-discovers every
     #' root-to-leaf path in the tree and lays them out automatically.
-    #' `$draw_consort_panels()` is the manual escape hatch for custom
-    #' layouts and labels.
-    #' @param panels A named list. Each element is either a character
-    #'   vector of cohort names (interpreted as the panel's main flow)
-    #'   or a list with components `flow` (character) and optional
-    #'   `side_branches` (named character of identity-only branches that
-    #'   merge into the spine).
-    #' @param file Optional character path. If supplied, the rendered
-    #'   plot is written to a `.pdf` or `.png` file. Otherwise the
-    #'   plot is drawn on the active device.
+    #' `$draw_consort_panels()` is the manual route for custom layouts
+    #' and labels.
+    #' @param panels A named list. Each element takes one of two forms:
+    #'   - a character vector of cohort names, which is the panel's main
+    #'     flow; or
+    #'   - a list with a `flow` component (character) and an optional
+    #'     `side_branches` component. `side_branches` is a named
+    #'     character vector of identity-only branches that merge into the
+    #'     spine.
+    #' @param file Optional character path. If you supply a path, the
+    #'   method writes the rendered plot to a `.pdf` or `.png` file.
+    #'   Otherwise the method draws the plot on the active device.
     #' @param ncol Optional integer. Number of panels per row.
     #' @param width,height Optional numeric (inches). File dimensions.
     #' @param text_width Integer. Wrap width for box text.
@@ -874,15 +879,16 @@ CohortPipeline <- R6::R6Class(
     #' Plot a CONSORT diagram of the cohort tree.
     #'
     #' With no arguments, plots one panel per cohort. Each panel walks
-    #' the root-to-cohort path automatically and uses cohort names as
-    #' box labels. With one or more cohort names, plots only those.
+    #' the root-to-cohort path automatically. It uses cohort names as box
+    #' labels. With one or more cohort names, plots only those.
     #'
     #' This is the default convenience entry point. Use
     #' `$draw_consort_panels()` for custom labels or layouts.
-    #' @param cohorts Optional character vector of cohort names. If
-    #'   omitted, every cohort is plotted.
-    #' @param file Optional `.pdf`/`.png` path. If supplied, the plot is
-    #'   written to that file. Otherwise it is drawn on the active device.
+    #' @param cohorts Optional character vector of cohort names. If you
+    #'   omit it, the method plots every cohort.
+    #' @param file Optional `.pdf`/`.png` path. If you supply a path, the
+    #'   method writes the plot to that file. Otherwise the method draws
+    #'   the plot on the active device.
     #' @param ncol,width,height,text_width,title_fontsize Optional layout
     #'   overrides; see `$draw_consort_panels()`.
     #' @return A list of grobs (invisibly).
@@ -977,10 +983,10 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Persist the pipeline to its `cache_file` (set at construction).
-    #' On the next `CohortPipeline$new(dt, cache_file = ...)` with the same
-    #' file, the saved state is restored and re-issued operations replay
-    #' from the cache; only divergent operations recompute. Idempotent
-    #' beyond the file write.
+    #' The next `CohortPipeline$new(dt, cache_file = ...)` with the same
+    #' file restores the saved state. Re-issued operations then replay
+    #' from the cache. Only divergent operations recompute. The method is
+    #' idempotent beyond the file write.
     #' @param file Optional override for the cache file path.
     #' @return The pipeline (invisibly).
     save = function(file = NULL) {
@@ -1008,13 +1014,13 @@ CohortPipeline <- R6::R6Class(
 
     #' @description
     #' Manually invalidate a cached cohort (drops the cohort and every
-    #' descendant) or a single artifact. Use when a helper function called
-    #' from inside a `set_artifact` `fn` has changed -- the cache key
-    #' (`body(fn)` + argset) cannot detect that automatically.
+    #' descendant) or a single artifact. Use this method when you change a
+    #' helper function that a `set_artifact` `fn` calls. The cache key
+    #' (`body(fn)` plus `argset`) cannot detect that change automatically.
     #' @param cohort Character. Cohort to invalidate.
-    #' @param artifact Optional character. If supplied, only the named
-    #'   artifact (and any artifacts declared after it on the same cohort)
-    #'   is dropped.
+    #' @param artifact Optional character. If you supply a name, the
+    #'   method drops only that artifact, and any artifacts declared after
+    #'   it on the same cohort.
     #' @return The pipeline (invisibly).
     invalidate = function(cohort, artifact = NULL) {
       if (!cohort %in% names(private$nodes)) {

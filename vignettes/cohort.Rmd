@@ -14,10 +14,10 @@ knitr::opts_chunk$set(
 )
 ```
 
-`cohort` provides the `CohortPipeline` R6 class for building analytic
-cohorts with full provenance. Cohort construction is kept strictly upstream
-of analysis: the pipeline produces analytic data tables, then hands them
-off to whatever consumes them downstream.
+`cohort` provides one R6 class, `CohortPipeline`. It builds analytic
+cohorts with full provenance. Cohort construction stays strictly upstream
+of analysis. The pipeline produces analytic data tables, then hands them
+to whatever consumes them downstream.
 
 ## A worked example
 
@@ -48,22 +48,21 @@ cp <- CohortPipeline$new(
 on.exit(cp$save(), add = TRUE)
 ```
 
-`CohortPipeline$new()` makes a defensive copy of `d` once. The user's
-data table is never mutated, no matter what subsequent operations you
-run on the pipeline.
+`CohortPipeline$new()` makes a defensive copy of `d` once. The pipeline
+never mutates your data table, whatever operations you run on it.
 
-The `cache_file` argument enables incremental re-execution: on the
-first run a snapshot is written to disk; on subsequent runs the
-snapshot is restored and matching operations replay instantly without
+The `cache_file` argument enables incremental re-execution. On the
+first run the pipeline writes a snapshot to disk. On later runs it
+restores the snapshot, and matching operations replay instantly with no
 recomputation. The `label` argument is the cohort's display label in
-CONSORT diagrams (defaults to `"Cohort participants"`); the
-identifier `"root"` is universal and always used in code.
+CONSORT diagrams, and defaults to `"Cohort participants"`. The
+identifier `"root"` is universal, and code always uses it.
 
 ### Step 2: apply root-level exclusions
 
 Every exclusion takes a human-readable reason and an R expression as a
-string. The string is parsed and evaluated against the rows currently
-included on the branch.
+string. The pipeline parses the string and evaluates it against the rows
+currently included on the branch.
 
 ```{r}
 cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
@@ -71,9 +70,9 @@ cp$exclude_and_track("root", "Missing age", "is.na(age)")
 cp$exclude_and_track("root", "Under 18",    "age < 18")
 ```
 
-`NA` predicate results are treated as `FALSE` (rows are kept) so you
-can write predicates without defensive `!is.na(...)` clauses for every
-column.
+The pipeline treats `NA` predicate results as `FALSE` and keeps those
+rows. You therefore do not need a defensive `!is.na(...)` clause for
+every column.
 
 ### Step 3: branch into sub-cohorts
 
@@ -86,10 +85,10 @@ cp$new_cohort("adults_grp_a", from = "root",
 cp$exclude_and_track("adults_grp_a", "Group not a", "grp != 'a'")
 ```
 
-Identifiers (`"adults_female"`, `"adults_grp_a"`) are what your code
-references; labels are what shows up in figures. Re-issuing
-`new_cohort()` with a different label silently updates the label
-without invalidating the cache.
+Your code references identifiers (`"adults_female"`, `"adults_grp_a"`).
+Figures show labels. Call `new_cohort()` again with a different label.
+The pipeline updates the label silently and does not invalidate the
+cache.
 
 A branch starts identical to its parent at the moment of branching.
 Sibling branches evolve independently.
@@ -101,19 +100,19 @@ A cohort becomes **frozen** the first time either:
 1. another cohort branches from it, or
 2. an artifact is set on it.
 
-After freezing, `$exclude_and_track()` on that cohort errors. The rule
-guarantees that a cohort's name maps to one definition forever: once
-children depend on it, its exclusion list is fixed. The practical
-workflow is "apply all exclusions on a cohort, then branch from it or
-attach artifacts." Multi-way forks are unaffected — you can branch a
+After a cohort freezes, `$exclude_and_track()` on it errors. The rule
+guarantees that a cohort's name maps to one definition forever. Once
+children depend on a cohort, its exclusion list is fixed. The practical
+workflow is: apply all exclusions on a cohort, then branch from it or
+attach artifacts. Multi-way forks are unaffected. You can branch a
 frozen cohort as many times as you like.
 
 ### Step 4: derive cached artifacts
 
 `set_artifact()` is for reusable per-cohort objects (analytic-ready data
 tables, summary statistics, baseline tables). Each callback receives a
-copy of the included rows and the named list of artifacts already
-attached to the cohort.
+copy of the included rows. It also receives the named list of artifacts
+already attached to the cohort.
 
 ```{r}
 cp$set_artifact("dt_for_analysis",
@@ -129,9 +128,8 @@ cp$set_artifact("dt_for_analysis",
 ```
 
 Each `set_artifact()` callback receives a *fresh* copy of the cohort's
-included rows — it does not see modifications made by previous
-artifacts. To chain derivations, read the previous artifact off the
-`sib` argument:
+included rows. It does not see changes that previous artifacts made. To
+chain derivations, read the previous artifact from the `sib` argument:
 
 ```{r}
 cp$set_artifact("baseline_table",
@@ -152,13 +150,13 @@ cp$consort()
 ```
 
 `$consort()` returns a long-form table — one row per exclusion step,
-across every branch. Each branch contributes only its own steps; steps
-inherited from a parent at branch time are reported under the parent.
+across every branch. Each branch contributes only its own steps. A step
+that a branch inherits from its parent appears under the parent.
 
 ### Step 6: hand off downstream
 
-Cached artifacts are plain R objects — pull them out with
-`$get_artifact()` and pass them to whatever consumes the analytic data.
+Cached artifacts are plain R objects. Read them with `$get_artifact()`,
+then pass them to whatever consumes the analytic data.
 
 ```{r}
 analytic_dt <- cp$get_artifact("adults_female", "dt_for_analysis")
@@ -185,15 +183,16 @@ cp$validate()
 ```
 
 If a column is missing, has the wrong type, or carries unexpected `NA`s,
-`$validate()` throws a single error listing every problem. Pass
+`$validate()` throws one error that lists every problem. Pass
 `auto_validate = TRUE` to `CohortPipeline$new()` to fail at the failure
-site (every `$new_cohort()` and `$set_artifact()` call validates after).
+site. Every `$new_cohort()` and `$set_artifact()` call then validates
+after it runs.
 
 ## CONSORT diagrams
 
 The simplest way to draw CONSORT diagrams is `$plot()`. With no
-arguments it renders one panel per cohort, walking the root-to-cohort
-path; cohort names become box labels.
+arguments it renders one panel per cohort. Each panel walks the
+root-to-cohort path, and cohort names become box labels.
 
 ```{r consort, fig.width = 10, fig.height = 6, fig.align = "center", out.width = "85%"}
 cp$plot()
@@ -216,9 +215,9 @@ use `$draw_consort_panels()` (see `?CohortPipeline`).
 
 ## How the cache decides what to recompute
 
-The worked example above already uses `cache_file` and `on.exit(cp$save())`.
-On the second run of the same script, every operation is checked
-against the cached log:
+The worked example already uses `cache_file` and `on.exit(cp$save())`.
+On the second run of the same script, the pipeline checks every
+operation against the cached log.
 
 | Method                | Cache key                          |
 |-----------------------|------------------------------------|
@@ -228,24 +227,24 @@ against the cached log:
 | `set_artifact`        | `(name, from, body(fn), argset)`   |
 
 A match advances the replay cursor with no work done. A mismatch
-truncates the log at that point, drops downstream artifacts, cascades
-to descendant cohorts whose inherited prefix is now stale, and
-recomputes only what changed. Labels are presentation, not part of
-the cache key, so re-issuing `new_cohort("adults_female", from =
-"root", label = "Adult women")` updates the label without
-invalidating anything.
+truncates the log at that point and drops downstream artifacts. It also
+cascades to descendant cohorts whose inherited prefix is now stale. It
+then recomputes only what changed. Labels are presentation, not part of
+the cache key. Call `new_cohort("adults_female", from = "root", label =
+"Adult women")` again, and the pipeline updates the label. It
+invalidates nothing.
 
-For `set_artifact`, prefer the 3-argument signature
-`function(dt, sib, argset)`: data dependencies in `argset` participate
-in the cache key, so changing `argset = list(washout = 84L)` to
-`washout = 90L` triggers a recompute. The 2-argument form
-`function(dt, sib)` still works but won't catch closure-captured
+For `set_artifact`, you SHOULD use the 3-argument signature
+`function(dt, sib, argset)`. Data dependencies in `argset` participate
+in the cache key. A change from `argset = list(washout = 84L)` to
+`washout = 90L` therefore triggers a recompute. The 2-argument form
+`function(dt, sib)` still works. It does not catch closure-captured
 changes.
 
-The cache key uses `body(fn)` literally; if `fn` calls a helper that
-you change, the cache cannot detect that. Either include a version tag
-in `argset`, or call `cp$invalidate(cohort)` to drop the cohort and
-force recompute.
+The cache key uses `body(fn)` literally. If `fn` calls a helper that
+you change, the cache cannot detect the change. Either include a
+version tag in `argset`, or call `cp$invalidate(cohort)` to drop the
+cohort and force a recompute.
 
 ## Mutation contract (summary)
 
@@ -263,8 +262,8 @@ data table or another branch.
 - Branching is O(n) in the number of rows of the base table. The data
   values themselves are stored once and shared across the tree.
 - `$exclude_and_track()` evaluates the predicate against the included
-  subset only; predicates may safely assume earlier exclusions have
+  subset only. A predicate can therefore assume that earlier exclusions
   already removed invalid rows.
-- The exclusion log is accumulated as a list and materialized as a
-  `data.table` only on read (`$consort()`, `$list_cohorts()`), avoiding
-  quadratic `rbind` growth.
+- The exclusion log accumulates as a list. It materializes as a
+  `data.table` only on read (`$consort()`, `$list_cohorts()`). That
+  avoids quadratic `rbind` growth.

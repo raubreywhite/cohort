@@ -5,24 +5,25 @@
 \title{R6 Class for Cohort Construction with Provenance}
 \description{
 \code{CohortPipeline} builds analytic cohorts as a tree of named branches with
-full exclusion provenance. Each branch derives from a parent branch by
-applying a sequence of named exclusion rules. Every exclusion is
-recorded -- its reason, the predicate that produced it, the number of
-subjects affected -- so the resulting object can drive a CONSORT diagram
-and serve as the auditable record of how the analytic dataset was
-constructed.
+full exclusion provenance. Each branch derives from a parent branch. It
+applies a sequence of named exclusion rules to that parent. The class
+records every exclusion. Each record holds the reason, the predicate that
+produced it, and the number of subjects affected. The object can
+therefore drive a CONSORT diagram. It is also the auditable record of how
+the analytic dataset was constructed.
 
-Cohort construction is kept strictly upstream of analysis: the class
+Cohort construction stays strictly upstream of analysis. The class
 produces analytic data tables that downstream code can consume. See
 \code{vignette("cohort", package = "cohort")} for a worked example.
 }
 \section{Storage strategy}{
 
-A \code{CohortPipeline} stores a single shared base data table and, for each
-branch, a small per-row integer status vector identifying which rows are
-included and which step excluded them. Branching is therefore O(n) in
-the number of rows of the base table and never copies the data values,
-so deep cohort trees stay flat in memory.
+A \code{CohortPipeline} stores one shared base data table. For each branch it
+also stores a small integer status vector, with one entry per row. The
+vector identifies which rows are included, and which step excluded the
+other rows. Branching is therefore O(n) in the number of rows of the base
+table. Branching never copies the data values, so deep cohort trees stay
+flat in memory.
 }
 
 \section{Freeze rule}{
@@ -33,25 +34,25 @@ A cohort becomes \strong{frozen} the first time either:
 \item an artifact is set on it (via \verb{$set_artifact(from = X)}).
 }
 
-After freezing, \verb{$exclude_and_track()} on that cohort errors. The rule
-guarantees that a cohort's name maps to exactly one definition forever:
-once children depend on it, its exclusion list is fixed, and any
+After a cohort freezes, \verb{$exclude_and_track()} on it errors. The rule
+guarantees that a cohort's name maps to exactly one definition forever.
+Once children depend on a cohort, its exclusion list is fixed. Any
 cached artifact stays consistent with the included rows that produced
-it. The practical workflow is "apply all exclusions on a cohort, then
-branch from it or attach artifacts." Multi-way forks are unaffected:
-you can branch a frozen cohort as many times as you like.
+it. The practical workflow is: apply all exclusions on a cohort, then
+branch from it or attach artifacts. Multi-way forks are unaffected. You
+can branch a frozen cohort as many times as you like.
 }
 
 \section{Mutation contract}{
 
 \itemize{
 \item \code{CohortPipeline$new(dt)} makes a defensive copy of \code{dt} once. The
-user's data table is never modified.
+class never modifies the user's data table.
 \item \verb{$get_included(cohort)} returns an independent copy. The caller may
-mutate it freely without affecting any other cohort or the shared
-base table.
-\item The data table passed to a \verb{$set_artifact()} callback is always an
-independent copy. Callbacks may mutate it freely.
+mutate it freely. The change does not affect any other cohort or the
+shared base table.
+\item \verb{$set_artifact()} always passes an independent copy of the data table
+to the callback. The callback may mutate it freely.
 \item \verb{$get_everyone(cohort)} returns an independent copy with a
 \code{.cohort_status} column reconstructed from the branch's status
 vector.
@@ -74,7 +75,8 @@ cohort. \code{fn} may be \verb{function(dt, sib)} or \verb{function(dt, sib, arg
 \code{.cohort_status} column.
 \item \verb{$get_artifact(cohort, name)} -- retrieve a cached artifact.
 \item \verb{$n_included(cohort)}, \verb{$n_total()} -- row counts.
-\item \verb{$list_cohorts()}, \verb{$list_artifacts(cohort)}, \verb{$list_schemas()}
+\item \verb{$list_cohorts()}, \verb{$list_artifacts(cohort)}, \verb{$list_schemas()} --
+inventories.
 \item \verb{$declare_schema(branch, schema, from)}, \verb{$validate()} -- column
 contracts.
 \item \verb{$consort()} -- long-form exclusion log across all branches.
@@ -87,13 +89,13 @@ persistence and manual cache invalidation.
 
 \section{Predicate strings}{
 
-Exclusion predicates are passed as strings (\code{expr_str}) and parsed with
-\code{parse(text = expr_str)}. The string is evaluated against the included
-subset of the base table, so predicates may safely assume that earlier
-exclusions have already removed invalid rows. \code{NA} predicate results
-are treated as \code{FALSE} (rows are kept). The original string is stored
-verbatim in the exclusion log, which keeps cohort definitions
-serializable and auditable.
+You pass exclusion predicates as strings (\code{expr_str}). The class parses
+each string with \code{parse(text = expr_str)}. It evaluates the string
+against the included subset of the base table. A predicate can therefore
+assume that earlier exclusions already removed invalid rows. The class
+treats \code{NA} predicate results as \code{FALSE}, so it keeps those rows. The
+exclusion log stores the original string verbatim. Cohort definitions
+therefore stay serializable and auditable.
 }
 
 \examples{
@@ -160,10 +162,10 @@ diagram.
 \if{latex}{\out{\hypertarget{method-CohortPipeline-initialize}{}}}
 \subsection{\code{CohortPipeline$new()}}{
   Create a new \code{CohortPipeline}. If \code{cache_file} is set and the file
-exists, the pipeline is restored from that snapshot and \code{dt} is
-used only as a sanity check (its dimensions and column names must
-match the cached base table). Otherwise \code{dt} is installed as the
-root cohort.
+exists, the constructor restores the pipeline from that snapshot.
+The constructor then uses \code{dt} only as a sanity check. Its
+dimensions and column names must match the cached base table.
+Otherwise the constructor installs \code{dt} as the root cohort.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$new(
@@ -179,21 +181,22 @@ root cohort.
     \describe{
       \item{\code{dt}}{A \code{data.table} to install as the root cohort. Required
 on cold construction; optional on warm cache load.}
-      \item{\code{cache_file}}{Optional character path. When supplied, an
-incremental cache is enabled. If the file exists, the pipeline
-is restored from it and subsequent operations replay the
-recorded log on cache hits, recomputing only divergent steps.
-If the file does not exist, fresh state is built and \verb{$save()}
-writes to this path. Recommended idiom for scripts:
-\code{on.exit(cp$save(), add = TRUE)} near the top.}
+      \item{\code{cache_file}}{Optional character path. When you supply a path,
+the pipeline enables an incremental cache. If the file exists,
+the constructor restores the pipeline from it. Subsequent
+operations then replay the recorded log on cache hits, and only
+divergent steps recompute. If the file does not exist, the
+constructor builds fresh state, and \verb{$save()} writes to this
+path. In a script, put \code{on.exit(cp$save(), add = TRUE)} near the
+top.}
       \item{\code{label}}{Optional character. Display label for the root cohort
-(used in CONSORT diagrams and \code{list_cohorts()}). Defaults to
-\code{"Cohort participants"}. Refreshed silently on warm cache load
-so changing the label between runs is allowed.}
-      \item{\code{auto_validate}}{Logical. When \code{TRUE}, \verb{$validate()} is invoked
-automatically after every \verb{$new_cohort()} and \verb{$set_artifact()}
-call so schema mismatches stop at the failure site rather than
-accumulating until the next manual \verb{$validate()}. Defaults to
+(used in CONSORT diagrams and \verb{$list_cohorts()}). Defaults to
+\code{"Cohort participants"}. A warm cache load refreshes the label
+silently, so you may change the label between runs.}
+      \item{\code{auto_validate}}{Logical. When \code{TRUE}, the pipeline calls
+\verb{$validate()} after every \verb{$new_cohort()} and \verb{$set_artifact()}
+call. A schema mismatch then stops at the failure site. It does
+not accumulate until the next manual \verb{$validate()}. Defaults to
 \code{FALSE}.}
     }
     \if{html}{\out{</div>}}
@@ -208,8 +211,8 @@ accumulating until the next manual \verb{$validate()}. Defaults to
 \if{latex}{\out{\hypertarget{method-CohortPipeline-declare_schema}{}}}
 \subsection{\code{CohortPipeline$declare_schema()}}{
   Declare a column-type / level / NA contract for a branch. Validation
-runs only when \verb{$validate()} is called (or automatically when the
-pipeline was constructed with \code{auto_validate = TRUE}).
+runs only when you call \verb{$validate()}. With \code{auto_validate = TRUE}
+at construction, the pipeline calls \verb{$validate()} for you.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$declare_schema(branch, schema = NULL, from = NULL)}
@@ -225,11 +228,11 @@ fields:
 \item \code{type}: one of \code{"integer"}, \code{"numeric"}, \code{"factor"}, \code{"logical"},
 \code{"Date"}, \code{"character"}.
 \item \code{levels} (factor only): expected \code{levels()} vector.
-\item \code{na}: if \code{FALSE}, the column must contain no \code{NA}s.
+\item \code{na}: if \code{FALSE}, the column MUST contain no \code{NA}s.
 }}
-      \item{\code{from}}{Optional character. If supplied, the new schema starts
-as a copy of the schema attached to \code{from} and the entries in
-\code{schema} are merged on top.}
+      \item{\code{from}}{Optional character. If you supply \code{from}, the new schema
+starts as a copy of the schema attached to \code{from}. The entries in
+\code{schema} then merge on top.}
     }
     \if{html}{\out{</div>}}
   }
@@ -243,7 +246,7 @@ as a copy of the schema attached to \code{from} and the entries in
 \if{latex}{\out{\hypertarget{method-CohortPipeline-validate}{}}}
 \subsection{\code{CohortPipeline$validate()}}{
   Validate every declared schema against the included rows of its
-branch. Throws an error listing every mismatch found.
+branch. Throws one error that lists every mismatch found.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$validate()}
@@ -289,8 +292,8 @@ branch. Throws an error listing every mismatch found.
 \if{latex}{\out{\hypertarget{method-CohortPipeline-new_cohort}{}}}
 \subsection{\code{CohortPipeline$new_cohort()}}{
   Create a new cohort branched from an existing cohort. The new
-cohort starts identical to its parent at the moment of branching;
-subsequent exclusions in the parent do not propagate to the child.
+cohort starts identical to its parent at the moment of branching.
+Later exclusions in the parent do not propagate to the child.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$new_cohort(name, from, label = NULL)}
@@ -302,8 +305,8 @@ subsequent exclusions in the parent do not propagate to the child.
       \item{\code{name}}{Character. Name of the new cohort.}
       \item{\code{from}}{Character. Name of the parent cohort.}
       \item{\code{label}}{Optional character. Display label for the cohort
-(used in CONSORT diagrams and \code{list_cohorts()}); defaults to
-\code{name}. May be refreshed silently across cache replays.}
+(used in CONSORT diagrams and \verb{$list_cohorts()}); defaults to
+\code{name}. A cache replay may refresh it silently.}
     }
     \if{html}{\out{</div>}}
   }
@@ -316,11 +319,11 @@ subsequent exclusions in the parent do not propagate to the child.
 \if{html}{\out{<a id="method-CohortPipeline-exclude_and_track"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-exclude_and_track}{}}}
 \subsection{\code{CohortPipeline$exclude_and_track()}}{
-  Apply an exclusion predicate to a cohort and record the result on
-the exclusion log. The predicate is evaluated against the included
-subset of the base table; rows for which the predicate evaluates
-to \code{TRUE} are excluded with the supplied reason. \code{NA} predicate
-results are treated as \code{FALSE}.
+  Apply an exclusion predicate to a cohort. Record the result on the
+exclusion log. The method evaluates the predicate against the
+included subset of the base table. It excludes every row where the
+predicate evaluates to \code{TRUE}, with the supplied reason. The method
+treats \code{NA} predicate results as \code{FALSE}.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$exclude_and_track(branch, reason, expr_str)}
@@ -350,17 +353,17 @@ results are treated as \code{FALSE}.
 \code{fn} may have either the legacy 2-argument signature
 \verb{function(dt, sib)} or the 3-argument signature
 \verb{function(dt, sib, argset)}. The 3-argument form pairs with the
-\code{argset} parameter to make the cache contract explicit: the cache
-key is \verb{(name, from, body(fn), argset)}, so the artifact is
-recomputed only when one of those changes. With the 2-argument
-form, \code{fn} is invoked normally but \code{argset} is not used in the
-cache key (suitable for one-off scripts; not recommended when
-relying on \code{cache_file}).
+\code{argset} parameter to make the cache contract explicit. The cache
+key is \verb{(name, from, body(fn), argset)}. The artifact recomputes
+only when one of those changes. With the 2-argument form, the
+method invokes \code{fn} normally, but \code{argset} does not join the cache
+key. Use the 2-argument form for one-off scripts. You SHOULD NOT
+use it together with \code{cache_file}.
 
-Note that the cache key uses \code{body(fn)} literally; if \code{fn} calls
-a helper that you change, the cache cannot detect that. Either
-include the helper's output / a version tag in \code{argset}, or call
-\verb{$invalidate()} to force recompute.
+The cache key uses \code{body(fn)} literally. If \code{fn} calls a helper
+that you change, the cache cannot detect the change. Either put
+the helper's output or a version tag in \code{argset}, or call
+\verb{$invalidate()} to force a recompute.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$set_artifact(name, from, fn, argset = NULL)}
@@ -389,9 +392,9 @@ cache key. Use the 3-argument \code{fn} signature to read these out.}
 \if{html}{\out{<a id="method-CohortPipeline-get_included"></a>}}
 \if{latex}{\out{\hypertarget{method-CohortPipeline-get_included}{}}}
 \subsection{\code{CohortPipeline$get_included()}}{
-  Return an independent copy of the included rows of a cohort. The
-returned \code{data.table} may be mutated freely without affecting the
-shared base table or any other cohort.
+  Return an independent copy of the included rows of a cohort. You
+may mutate the returned \code{data.table} freely. The change does not
+affect the shared base table or any other cohort.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$get_included(cohort)}
@@ -415,7 +418,7 @@ shared base table or any other cohort.
 \subsection{\code{CohortPipeline$get_everyone()}}{
   Return a copy of the full base table with a \code{.cohort_status} column
 reconstructed from this branch's exclusion history. Included rows
-are labeled \code{"included"}; excluded rows carry the reason of the
+carry the label \code{"included"}. Excluded rows carry the reason of the
 first exclusion that caught them.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
@@ -542,9 +545,9 @@ artifacts.
 \if{latex}{\out{\hypertarget{method-CohortPipeline-consort}{}}}
 \subsection{\code{CohortPipeline$consort()}}{
   Long-form table of exclusion log entries across all cohorts.
-Each cohort contributes only its own exclusion steps (steps
-inherited from the parent at branch time are reported under the
-parent, not duplicated).
+Each cohort contributes only its own exclusion steps. A step that a
+cohort inherits from its parent at branch time appears under the
+parent only. The table does not duplicate it.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$consort()}
@@ -561,13 +564,13 @@ parent, not duplicated).
 \if{latex}{\out{\hypertarget{method-CohortPipeline-draw_consort_panels}{}}}
 \subsection{\code{CohortPipeline$draw_consort_panels()}}{
   Render one or more CONSORT panels for cohort flows. Each panel
-walks a sequence of cohort names, lumping the named cohorts'
+walks a sequence of cohort names. It lumps the named cohorts'
 exclusion steps into bullet blocks.
 
-Most users want \verb{$plot()} instead, which auto-discovers every
+Most users want \verb{$plot()} instead. \verb{$plot()} auto-discovers every
 root-to-leaf path in the tree and lays them out automatically.
-\verb{$draw_consort_panels()} is the manual escape hatch for custom
-layouts and labels.
+\verb{$draw_consort_panels()} is the manual route for custom layouts
+and labels.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$draw_consort_panels(
@@ -584,14 +587,18 @@ layouts and labels.
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{panels}}{A named list. Each element is either a character
-vector of cohort names (interpreted as the panel's main flow)
-or a list with components \code{flow} (character) and optional
-\code{side_branches} (named character of identity-only branches that
-merge into the spine).}
-      \item{\code{file}}{Optional character path. If supplied, the rendered
-plot is written to a \code{.pdf} or \code{.png} file. Otherwise the
-plot is drawn on the active device.}
+      \item{\code{panels}}{A named list. Each element takes one of two forms:
+\itemize{
+\item a character vector of cohort names, which is the panel's main
+flow; or
+\item a list with a \code{flow} component (character) and an optional
+\code{side_branches} component. \code{side_branches} is a named
+character vector of identity-only branches that merge into the
+spine.
+}}
+      \item{\code{file}}{Optional character path. If you supply a path, the
+method writes the rendered plot to a \code{.pdf} or \code{.png} file.
+Otherwise the method draws the plot on the active device.}
       \item{\code{ncol}}{Optional integer. Number of panels per row.}
       \item{\code{width, height}}{Optional numeric (inches). File dimensions.}
       \item{\code{text_width}}{Integer. Wrap width for box text.}
@@ -611,8 +618,8 @@ plot is drawn on the active device.}
   Plot a CONSORT diagram of the cohort tree.
 
 With no arguments, plots one panel per cohort. Each panel walks
-the root-to-cohort path automatically and uses cohort names as
-box labels. With one or more cohort names, plots only those.
+the root-to-cohort path automatically. It uses cohort names as box
+labels. With one or more cohort names, plots only those.
 
 This is the default convenience entry point. Use
 \verb{$draw_consort_panels()} for custom labels or layouts.
@@ -632,10 +639,11 @@ This is the default convenience entry point. Use
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{cohorts}}{Optional character vector of cohort names. If
-omitted, every cohort is plotted.}
-      \item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If supplied, the plot is
-written to that file. Otherwise it is drawn on the active device.}
+      \item{\code{cohorts}}{Optional character vector of cohort names. If you
+omit it, the method plots every cohort.}
+      \item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If you supply a path, the
+method writes the plot to that file. Otherwise the method draws
+the plot on the active device.}
       \item{\code{ncol, width, height, text_width, title_fontsize}}{Optional layout
 overrides; see \verb{$draw_consort_panels()}.}
     }
@@ -674,10 +682,10 @@ attached artifacts.
 \if{latex}{\out{\hypertarget{method-CohortPipeline-save}{}}}
 \subsection{\code{CohortPipeline$save()}}{
   Persist the pipeline to its \code{cache_file} (set at construction).
-On the next \code{CohortPipeline$new(dt, cache_file = ...)} with the same
-file, the saved state is restored and re-issued operations replay
-from the cache; only divergent operations recompute. Idempotent
-beyond the file write.
+The next \code{CohortPipeline$new(dt, cache_file = ...)} with the same
+file restores the saved state. Re-issued operations then replay
+from the cache. Only divergent operations recompute. The method is
+idempotent beyond the file write.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$save(file = NULL)}
@@ -700,9 +708,9 @@ beyond the file write.
 \if{latex}{\out{\hypertarget{method-CohortPipeline-invalidate}{}}}
 \subsection{\code{CohortPipeline$invalidate()}}{
   Manually invalidate a cached cohort (drops the cohort and every
-descendant) or a single artifact. Use when a helper function called
-from inside a \code{set_artifact} \code{fn} has changed -- the cache key
-(\code{body(fn)} + argset) cannot detect that automatically.
+descendant) or a single artifact. Use this method when you change a
+helper function that a \code{set_artifact} \code{fn} calls. The cache key
+(\code{body(fn)} plus \code{argset}) cannot detect that change automatically.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{CohortPipeline$invalidate(cohort, artifact = NULL)}
@@ -712,9 +720,9 @@ from inside a \code{set_artifact} \code{fn} has changed -- the cache key
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{cohort}}{Character. Cohort to invalidate.}
-      \item{\code{artifact}}{Optional character. If supplied, only the named
-artifact (and any artifacts declared after it on the same cohort)
-is dropped.}
+      \item{\code{artifact}}{Optional character. If you supply a name, the
+method drops only that artifact, and any artifacts declared after
+it on the same cohort.}
     }
     \if{html}{\out{</div>}}
   }

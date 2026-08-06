@@ -2,12 +2,16 @@
 
 [![CRAN status](https://www.r-pkg.org/badges/version/cohort)](https://cran.r-project.org/package=cohort)
 
-`cohort` is a small R package for building analytic cohorts with full
-provenance: branched cohort trees, per-step exclusion logging, schema
-validation at branch boundaries, cached derived artifacts, and CONSORT
-diagram generation.
+`cohort` is a small R package that builds analytic cohorts with full
+provenance:
 
-The framework cleanly separates cohort definition from analysis: it
+- branched cohort trees;
+- per-step exclusion logging;
+- schema validation at branch boundaries;
+- cached derived artifacts;
+- CONSORT diagram generation.
+
+The framework cleanly separates cohort definition from analysis. It
 produces analytic data tables that downstream code consumes.
 
 ## Installation
@@ -32,8 +36,7 @@ d <- data.table(
   sex = c("F", "M", "F", "F", NA, "M", "M", "F", "F", "M")
 )
 
-cp <- CohortPipeline$new()
-cp$load(d)
+cp <- CohortPipeline$new(d)
 
 # Root-level exclusions on the shared base
 cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
@@ -51,19 +54,21 @@ cp$set_artifact("mean_age", from = "adults_female",
 cp
 #> <CohortPipeline>
 #> root: loaded = 10, included = 6, excluded = 4, 3 exclusion step(s)
-#>   adults_female: branched from root at n = 6, own excluded = 1, included = 5, 1 own step(s)
+#>   adults_female: branched from root at n = 6, own excluded = 4, included = 2, 1 own step(s)
+#>     $ mean_age
 
 cp$consort()
-#>          branch parent step       reason     expr_str n_excluded n_remaining
-#> 1:         root   <NA>    1  Missing sex   is.na(sex)          1           9
-#> 2:         root   <NA>    2  Missing age   is.na(age)          1           8
-#> 3:         root   <NA>    3     Under 18     age < 18          2           6
-#> 4: adults_female  root    4   Not female sex != 'F'          1           5
+#>           branch parent  step      reason   expr_str n_excluded n_remaining
+#>           <char> <char> <int>      <char>     <char>      <int>       <int>
+#> 1:          root   <NA>     1 Missing sex is.na(sex)          1           9
+#> 2:          root   <NA>     2 Missing age is.na(age)          1           8
+#> 3:          root   <NA>     3    Under 18   age < 18          2           6
+#> 4: adults_female   root     4  Not female sex != 'F'          4           2
 ```
 
-Cached artifacts are plain R objects — retrieve them with
-`cp$get_artifact("adults_female", "<artifact>")` and pass them
-straight into whatever consumes analytic data.
+Cached artifacts are plain R objects. Read one with
+`cp$get_artifact("adults_female", "<artifact>")`, then pass it to
+whatever consumes analytic data.
 
 ## Documentation
 
@@ -72,16 +77,16 @@ straight into whatever consumes analytic data.
 
 ## Design
 
-- **Shared base, per-branch index.** A single copy of the base table is
-  stored. Each branch holds an O(n) integer status vector. Branching
-  never copies the data values.
-- **String-form exclusion predicates.** Exclusions are passed as strings
-  so the cohort definition is serializable and auditable.
-- **No in-band status column.** The user's data table is never mutated.
-  The `.cohort_status` column is reconstructed only when
-  `$get_everyone()` is called.
+- **Shared base, per-branch index.** `cohort` stores a single copy of
+  the base table. Each branch holds an O(n) integer status vector.
+  Branching never copies the data values.
+- **String-form exclusion predicates.** You pass exclusions as strings.
+  The cohort definition therefore stays serializable and auditable.
+- **No in-band status column.** `cohort` never mutates your data table.
+  It reconstructs the `.cohort_status` column only when you call
+  `$get_everyone()`.
 - **Mutation-safe by default.** `$get_included()` and the
-  `$set_artifact()` callback contract both default to handing out
-  independent copies.
+  `$set_artifact()` callback contract both default to independent
+  copies.
 
 See `NEWS.md` and the package vignette for details.

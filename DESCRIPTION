@@ -1,9 +1,16 @@
 Package: cohort
 Title: Build Analytic Cohorts with Full Provenance
 Version: 2026.8.6
-Authors@R: c(
-  person(c("Richard","Aubrey"), "White", email = "hello@rwhite.no", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-6747-1726"))
-  )
+Authors@R:
+    c(
+      person(
+        given = c("Richard", "Aubrey"),
+        family = "White",
+        email = "hello@rwhite.no",
+        role = c("aut", "cre", "cph"),
+        comment = c(ORCID = "0000-0002-6747-1726")
+      )
+    )
 Description: A framework for building analytic cohorts with full provenance.
     Supports branched cohort trees, per-step exclusion logging with
     human-readable reasons, schema validation at branch boundaries, cached

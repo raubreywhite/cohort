@@ -22,7 +22,7 @@ License: MIT + file LICENSE
 URL: https://www.rwhite.no/cohort/, https://github.com/raubreywhite/cohort
 BugReports: https://github.com/raubreywhite/cohort/issues
 Encoding: UTF-8
-Config/Needs/website: raubreywhite/pkgdowntemplate
+Config/Needs/website: raubreywhite/rwtemplate
 Depends: R (>= 3.5.0)
 Imports:
     data.table,

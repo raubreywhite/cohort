@@ -1,3 +1,10 @@
+# Version 2026.8.21
+
+- `R/0_env.R` is deleted. It existed only to declare `.cohort_status` in
+  `utils::globalVariables()`, and that declaration was dead: `.cohort_status`
+  appears only on the left of `:=`, which `R CMD check` never reads as an
+  undefined variable. Removing the whole file leaves the check at 0/0/0.
+
 # Version 2026.8.6
 
 ## Licensing

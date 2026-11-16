@@ -5,9 +5,10 @@
 #' full exclusion provenance. Each branch derives from a parent branch. It
 #' applies a sequence of named exclusion rules to that parent. The class
 #' records every exclusion. Each record holds the reason, the predicate that
-#' produced it, and the number of subjects affected. The object can
-#' therefore drive a CONSORT diagram. It is also the auditable record of how
-#' the analytic dataset was constructed.
+#' produced it, and the number of subjects affected. `$consort()` returns
+#' these records as one table, which holds the counts for a CONSORT diagram.
+#' The object is also the auditable record of how the analytic dataset was
+#' constructed.
 #'
 #' Cohort construction stays strictly upstream of analysis. The class
 #' produces analytic data tables that downstream code can consume. See
@@ -61,12 +62,8 @@
 #'   `.cohort_status` column.
 #' - `$get_artifact(cohort, name)` -- retrieve a cached artifact.
 #' - `$n_included(cohort)`, `$n_total()` -- row counts.
-#' - `$list_cohorts()`, `$list_artifacts(cohort)`, `$list_schemas()` --
-#'   inventories.
-#' - `$declare_schema(branch, schema, from)`, `$validate()` -- column
-#'   contracts.
+#' - `$list_cohorts()`, `$list_artifacts(cohort)` -- inventories.
 #' - `$consort()` -- long-form exclusion log across all branches.
-#' - `$draw_consort_panels(panels, file)` -- render CONSORT diagrams.
 #' - `$save(file)`, `$invalidate(cohort, artifact)` -- incremental cache
 #'   persistence and manual cache invalidation.
 #' - `$print()` -- concise text summary of the cohort tree.
@@ -107,9 +104,8 @@
 #' cp$consort()
 #' cp$get_artifact("adults_female", "mean_age")
 #'
-#' @seealso `vignette("cohort")` for a worked example that branches a cohort,
-#'   caches derived artifacts, declares a column schema and draws a CONSORT
-#'   diagram.
+#' @seealso `vignette("cohort")` for a worked example that branches a cohort
+#'   and caches derived artifacts.
 #' @import data.table
 #' @import R6
 #' @importFrom digest digest
@@ -126,10 +122,11 @@ CohortPipeline <- R6::R6Class(
     #' Otherwise the constructor installs `dt` as the root cohort.
     #' @param dt A `data.table` to install as the root cohort. Required
     #'   on cold construction; optional on warm cache load.
-    #' @param label Optional character. Display label for the root cohort
-    #'   (used in CONSORT diagrams and `$list_cohorts()`). Defaults to
-    #'   `"Cohort participants"`. A warm cache load refreshes the label
-    #'   silently, so you may change the label between runs.
+    #' @param label Optional character. Display label for the root cohort.
+    #'   Defaults to `"Cohort participants"`. The pipeline stores the label
+    #'   with the cohort, and no method returns it. A warm cache load
+    #'   refreshes the label silently, so you may change the label between
+    #'   runs.
     #' @param cache_file Optional character path. When you supply a path,
     #'   the pipeline enables an incremental cache. If the file exists,
     #'   the constructor restores the pipeline from it. Subsequent
@@ -138,21 +135,13 @@ CohortPipeline <- R6::R6Class(
     #'   constructor builds fresh state, and `$save()` writes to this
     #'   path. In a script, put `on.exit(cp$save(), add = TRUE)` near the
     #'   top.
-    #' @param auto_validate Logical. When `TRUE`, the pipeline calls
-    #'   `$validate()` after every `$new_cohort()` and `$set_artifact()`
-    #'   call. A schema mismatch then stops at the failure site. It does
-    #'   not accumulate until the next manual `$validate()`. Defaults to
-    #'   `FALSE`.
     #' @return A new `CohortPipeline` instance.
     initialize = function(
       dt = NULL,
       cache_file = NULL,
-      label = NULL,
-      auto_validate = FALSE
+      label = NULL
     ) {
-      private$schemas <- list()
       private$nodes <- list()
-      private$auto_validate <- isTRUE(auto_validate)
       private$cache_file <- cache_file
 
       if (!is.null(cache_file) && file.exists(cache_file)) {
@@ -183,7 +172,6 @@ CohortPipeline <- R6::R6Class(
           private$base_dt <- snap$base_dt
           private$base_dt_hash <- snap$base_dt_hash
           private$nodes <- snap$nodes
-          private$schemas <- snap$schemas
           for (nm in names(private$nodes)) {
             private$nodes[[nm]]$replay_cursor <-
               private$nodes[[nm]]$branched_at_log_len
@@ -209,149 +197,14 @@ CohortPipeline <- R6::R6Class(
     },
 
     #' @description
-    #' Declare a column-type / level / NA contract for a branch. Validation
-    #' runs only when you call `$validate()`. With `auto_validate = TRUE`
-    #' at construction, the pipeline calls `$validate()` for you.
-    #' @param branch Character. Branch name to attach the schema to.
-    #' @param schema Named list. Each element describes one column with
-    #'   fields:
-    #'   - `type`: one of `"integer"`, `"numeric"`, `"factor"`, `"logical"`,
-    #'     `"Date"`, `"character"`.
-    #'   - `levels` (factor only): expected `levels()` vector.
-    #'   - `na`: if `FALSE`, the column MUST contain no `NA`s.
-    #' @param from Optional character. If you supply `from`, the new schema
-    #'   starts as a copy of the schema attached to `from`. The entries in
-    #'   `schema` then merge on top.
-    #' @return The pipeline (invisibly).
-    declare_schema = function(branch, schema = NULL, from = NULL) {
-      if (!is.null(from)) {
-        if (!from %in% names(private$schemas)) {
-          stop("declare_schema: unknown 'from' branch: ", from, call. = FALSE)
-        }
-        base <- private$schemas[[from]]
-        if (!is.null(schema)) {
-          for (nm in names(schema)) {
-            base[[nm]] <- schema[[nm]]
-          }
-        }
-        private$schemas[[branch]] <- base
-      } else {
-        if (is.null(schema)) {
-          stop(
-            "declare_schema: 'schema' must be supplied when 'from' is NULL.",
-            call. = FALSE
-          )
-        }
-        private$schemas[[branch]] <- schema
-      }
-      invisible(self)
-    },
-
-    #' @description
-    #' Validate every declared schema against the included rows of its
-    #' branch. Throws one error that lists every mismatch found.
-    #' @return The pipeline (invisibly), if validation passes.
-    validate = function() {
-      errors <- character()
-      for (branch in names(private$schemas)) {
-        schema <- private$schemas[[branch]]
-        if (!branch %in% names(private$nodes)) {
-          errors <- c(errors, sprintf("[%s] Branch not found", branch))
-          next
-        }
-        dt <- self$get_included(branch)
-        for (col_name in names(schema)) {
-          spec <- schema[[col_name]]
-          if (!col_name %in% names(dt)) {
-            errors <- c(
-              errors,
-              sprintf("[%s] Missing column: %s", branch, col_name)
-            )
-            next
-          }
-          col <- dt[[col_name]]
-          ok <- switch(
-            spec$type,
-            "integer" = is.integer(col),
-            "numeric" = is.numeric(col),
-            "factor" = is.factor(col),
-            "logical" = is.logical(col),
-            "Date" = inherits(col, "Date"),
-            "character" = is.character(col),
-            TRUE
-          )
-          if (!ok) {
-            errors <- c(
-              errors,
-              sprintf(
-                "[%s] %s: expected %s, got %s",
-                branch,
-                col_name,
-                spec$type,
-                class(col)[1]
-              )
-            )
-          }
-          if (
-            identical(spec$type, "factor") &&
-              !is.null(spec$levels) &&
-              !identical(levels(col), spec$levels)
-          ) {
-            errors <- c(
-              errors,
-              sprintf("[%s] %s: factor levels mismatch", branch, col_name)
-            )
-          }
-          if (isFALSE(spec$na) && anyNA(col)) {
-            errors <- c(
-              errors,
-              sprintf(
-                "[%s] %s: unexpected NAs (%d)",
-                branch,
-                col_name,
-                sum(is.na(col))
-              )
-            )
-          }
-        }
-      }
-      if (length(errors) > 0L) {
-        stop(
-          "CohortPipeline validation failed:\n  ",
-          paste(errors, collapse = "\n  "),
-          call. = FALSE
-        )
-      }
-      message("[validate] All CohortPipeline schemas passed")
-      invisible(self)
-    },
-
-    #' @description
-    #' Tabulate the names and column counts of all declared schemas.
-    #' @return A `data.table` with columns `branch` and `n_cols`.
-    list_schemas = function() {
-      data.table::rbindlist(lapply(names(private$schemas), function(nm) {
-        data.table::data.table(
-          branch = nm,
-          n_cols = length(private$schemas[[nm]])
-        )
-      }))
-    },
-
-    #' @description
-    #' Return the raw schema list for inspection.
-    #' @return A named list of schemas.
-    get_schemas = function() private$schemas,
-
-    #' @description
     #' Create a new cohort branched from an existing cohort. The new
     #' cohort starts identical to its parent at the moment of branching.
     #' Later exclusions in the parent do not propagate to the child.
     #' @param name Character. Name of the new cohort.
     #' @param from Character. Name of the parent cohort.
-    #' @param label Optional character. Display label for the cohort
-    #'   (used in CONSORT diagrams and `$list_cohorts()`); defaults to
-    #'   `name`. A cache replay may refresh it silently.
+    #' @param label Optional character. Display label for the cohort.
+    #'   Defaults to `name`. The pipeline stores the label with the cohort,
+    #'   and no method returns it. A cache replay may refresh it silently.
     #' @return The pipeline (invisibly).
     new_cohort = function(name, from, label = NULL) {
       if (!from %in% names(private$nodes)) {
@@ -427,9 +280,6 @@ CohortPipeline <- R6::R6Class(
       # must not change again, otherwise sibling branches would have
       # silently different parent states.
       private$nodes[[from]]$frozen <- TRUE
-      if (private$auto_validate) {
-        self$validate()
-      }
       invisible(self)
     },
 
@@ -634,9 +484,6 @@ CohortPipeline <- R6::R6Class(
       # silently invalidate the cached value.
       node$frozen <- TRUE
       private$nodes[[from]] <- node
-      if (private$auto_validate) {
-        self$validate()
-      }
       invisible(self)
     },
 
@@ -835,108 +682,6 @@ CohortPipeline <- R6::R6Class(
     },
 
     #' @description
-    #' Render one or more CONSORT panels for cohort flows. Each panel
-    #' walks a sequence of cohort names. It lumps the named cohorts'
-    #' exclusion steps into bullet blocks.
-    #'
-    #' Most users want `$plot()` instead. `$plot()` auto-discovers every
-    #' root-to-leaf path in the tree and lays them out automatically.
-    #' `$draw_consort_panels()` is the manual route for custom layouts
-    #' and labels.
-    #' @param panels A named list. Each element takes one of two forms:
-    #'   - a character vector of cohort names, which is the panel's main
-    #'     flow; or
-    #'   - a list with a `flow` component (character) and an optional
-    #'     `side_branches` component. `side_branches` is a named
-    #'     character vector of identity-only branches that merge into the
-    #'     spine.
-    #' @param file Optional character path. If you supply a path, the
-    #'   method writes the rendered plot to a `.pdf` or `.png` file.
-    #'   Otherwise the method draws the plot on the active device.
-    #' @param ncol Optional integer. Number of panels per row.
-    #' @param width,height Optional numeric (inches). File dimensions.
-    #' @param text_width Integer. Wrap width for box text.
-    #' @param title_fontsize Numeric. Title fontsize for each panel.
-    #' @return A list of grobs (invisibly).
-    draw_consort_panels = function(
-      panels,
-      file = NULL,
-      ncol = NULL,
-      width = NULL,
-      height = NULL,
-      text_width = 40,
-      title_fontsize = 14
-    ) {
-      .draw_consort_panels_impl(
-        panels = panels,
-        nodes = private$nodes,
-        file = file,
-        ncol = ncol,
-        width = width,
-        height = height,
-        text_width = text_width,
-        title_fontsize = title_fontsize
-      )
-    },
-
-    #' @description
-    #' Plot a CONSORT diagram of the cohort tree.
-    #'
-    #' With no arguments, plots one panel per cohort. Each panel walks
-    #' the root-to-cohort path automatically. It uses cohort names as box
-    #' labels. With one or more cohort names, plots only those.
-    #'
-    #' This is the default convenience entry point. Use
-    #' `$draw_consort_panels()` for custom labels or layouts.
-    #' @param cohorts Optional character vector of cohort names. If you
-    #'   omit it, the method plots every cohort.
-    #' @param file Optional `.pdf`/`.png` path. If you supply a path, the
-    #'   method writes the plot to that file. Otherwise the method draws
-    #'   the plot on the active device.
-    #' @param ncol,width,height,text_width,title_fontsize Optional layout
-    #'   overrides; see `$draw_consort_panels()`.
-    #' @return A list of grobs (invisibly).
-    plot = function(
-      cohorts = NULL,
-      file = NULL,
-      ncol = NULL,
-      width = NULL,
-      height = NULL,
-      text_width = 40,
-      title_fontsize = 14
-    ) {
-      if (length(private$nodes) == 0L) {
-        stop(
-          "plot: pipeline has no cohorts. Construct with ",
-          "CohortPipeline$new(dt) first.",
-          call. = FALSE
-        )
-      }
-      if (is.null(cohorts)) {
-        cohorts <- names(private$nodes)
-      } else {
-        unknown <- setdiff(cohorts, names(private$nodes))
-        if (length(unknown) > 0L) {
-          stop(
-            "plot: unknown cohort(s): ",
-            paste(unknown, collapse = ", "),
-            call. = FALSE
-          )
-        }
-      }
-      panels <- private$build_default_panels(cohorts)
-      self$draw_consort_panels(
-        panels = panels,
-        file = file,
-        ncol = ncol,
-        width = width,
-        height = height,
-        text_width = text_width,
-        title_fontsize = title_fontsize
-      )
-    },
-
-    #' @description
     #' Concise text summary of the cohort tree, exclusion counts, and
     #' attached artifacts.
     #' @param ... Unused.
@@ -1008,8 +753,7 @@ CohortPipeline <- R6::R6Class(
           cache_version = .COHORT_CACHE_VERSION,
           base_dt = private$base_dt,
           base_dt_hash = private$base_dt_hash,
-          nodes = private$nodes,
-          schemas = private$schemas
+          nodes = private$nodes
         ),
         file = path
       )
@@ -1061,8 +805,6 @@ CohortPipeline <- R6::R6Class(
   private = list(
     base_dt = NULL,
     nodes = NULL,
-    schemas = NULL,
-    auto_validate = FALSE,
     cache_file = NULL,
     base_dt_hash = NULL,
 
@@ -1086,52 +828,6 @@ CohortPipeline <- R6::R6Class(
           replay_cursor = 0L
         )
       )
-    },
-
-    # Read-only access to the shared base table for plotting helpers.
-    get_base_dt = function() private$base_dt,
-    get_nodes = function() private$nodes,
-
-    # Names of leaf cohorts (cohorts with no children).
-    leaf_cohorts = function() {
-      parents <- vapply(
-        private$nodes,
-        function(n) {
-          if (is.null(n$parent) || is.na(n$parent)) NA_character_ else n$parent
-        },
-        character(1L)
-      )
-      has_child <- names(private$nodes) %in% parents
-      names(private$nodes)[!has_child]
-    },
-
-    # Build the panels list for $plot(). One panel per cohort, walking
-    # the root-to-cohort path. Box labels and panel titles use each
-    # cohort's display label (falling back to its identifier).
-    build_default_panels = function(cohorts) {
-      label_of <- function(nm) {
-        private$nodes[[nm]]$label %||% nm
-      }
-      panels <- list()
-      for (co in cohorts) {
-        path <- private$ancestor_path(co) # root-first character vector
-        names(path) <- vapply(path, label_of, character(1L))
-        panels[[label_of(co)]] <- path
-      }
-      panels
-    },
-
-    # Walk parents from a cohort up to the root; return a root-first
-    # character vector.
-    ancestor_path = function(cohort) {
-      out <- character()
-      cur <- cohort
-      while (!is.null(cur) && !is.na(cur)) {
-        out <- c(cur, out)
-        parent <- private$nodes[[cur]]$parent
-        cur <- if (is.null(parent) || is.na(parent)) NULL else parent
-      }
-      out
     },
 
     # All transitive descendants of a cohort.

@@ -7,9 +7,7 @@ provenance:
 
 - branched cohort trees;
 - per-step exclusion logging;
-- schema validation at branch boundaries;
-- cached derived artifacts;
-- CONSORT diagram generation.
+- cached derived artifacts.
 
 The framework cleanly separates cohort definition from analysis. It
 produces analytic data tables that downstream code consumes.

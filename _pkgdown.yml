@@ -7,9 +7,8 @@ template:
       overline: "R package · Cohort construction"
       title: "Build cohorts with full provenance."
       lede: >
-        Branched cohort trees, per-step exclusion logging, schema validation at
-        branch boundaries, cached artifacts, and CONSORT diagrams — cleanly
-        separating cohort <em>definition</em> from analysis.
+        Branched cohort trees, per-step exclusion logging and cached artifacts.
+        Cohort <em>definition</em> stays separate from analysis.
       cta:
         primary:
           text: "Get started"

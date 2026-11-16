@@ -8,9 +8,10 @@
 full exclusion provenance. Each branch derives from a parent branch. It
 applies a sequence of named exclusion rules to that parent. The class
 records every exclusion. Each record holds the reason, the predicate that
-produced it, and the number of subjects affected. The object can
-therefore drive a CONSORT diagram. It is also the auditable record of how
-the analytic dataset was constructed.
+produced it, and the number of subjects affected. \verb{$consort()} returns
+these records as one table, which holds the counts for a CONSORT diagram.
+The object is also the auditable record of how the analytic dataset was
+constructed.
 
 Cohort construction stays strictly upstream of analysis. The class
 produces analytic data tables that downstream code can consume. See
@@ -75,12 +76,8 @@ cohort. \code{fn} may be \verb{function(dt, sib)} or \verb{function(dt, sib, arg
 \code{.cohort_status} column.
 \item \verb{$get_artifact(cohort, name)} -- retrieve a cached artifact.
 \item \verb{$n_included(cohort)}, \verb{$n_total()} -- row counts.
-\item \verb{$list_cohorts()}, \verb{$list_artifacts(cohort)}, \verb{$list_schemas()} --
-inventories.
-\item \verb{$declare_schema(branch, schema, from)}, \verb{$validate()} -- column
-contracts.
+\item \verb{$list_cohorts()}, \verb{$list_artifacts(cohort)} -- inventories.
 \item \verb{$consort()} -- long-form exclusion log across all branches.
-\item \verb{$draw_consort_panels(panels, file)} -- render CONSORT diagrams.
 \item \verb{$save(file)}, \verb{$invalidate(cohort, artifact)} -- incremental cache
 persistence and manual cache invalidation.
 \item \verb{$print()} -- concise text summary of the cohort tree.
@@ -127,18 +124,13 @@ cp$get_artifact("adults_female", "mean_age")
 
 }
 \seealso{
-\code{vignette("cohort")} for a worked example that branches a cohort,
-caches derived artifacts, declares a column schema and draws a CONSORT
-diagram.
+\code{vignette("cohort")} for a worked example that branches a cohort
+and caches derived artifacts.
 }
 \section{Methods}{
 \subsection{Public methods}{
   \itemize{
     \item \href{#method-CohortPipeline-initialize}{\code{CohortPipeline$new()}}
-    \item \href{#method-CohortPipeline-declare_schema}{\code{CohortPipeline$declare_schema()}}
-    \item \href{#method-CohortPipeline-validate}{\code{CohortPipeline$validate()}}
-    \item \href{#method-CohortPipeline-list_schemas}{\code{CohortPipeline$list_schemas()}}
-    \item \href{#method-CohortPipeline-get_schemas}{\code{CohortPipeline$get_schemas()}}
     \item \href{#method-CohortPipeline-new_cohort}{\code{CohortPipeline$new_cohort()}}
     \item \href{#method-CohortPipeline-exclude_and_track}{\code{CohortPipeline$exclude_and_track()}}
     \item \href{#method-CohortPipeline-set_artifact}{\code{CohortPipeline$set_artifact()}}
@@ -150,8 +142,6 @@ diagram.
     \item \href{#method-CohortPipeline-list_cohorts}{\code{CohortPipeline$list_cohorts()}}
     \item \href{#method-CohortPipeline-list_artifacts}{\code{CohortPipeline$list_artifacts()}}
     \item \href{#method-CohortPipeline-consort}{\code{CohortPipeline$consort()}}
-    \item \href{#method-CohortPipeline-draw_consort_panels}{\code{CohortPipeline$draw_consort_panels()}}
-    \item \href{#method-CohortPipeline-plot}{\code{CohortPipeline$plot()}}
     \item \href{#method-CohortPipeline-print}{\code{CohortPipeline$print()}}
     \item \href{#method-CohortPipeline-save}{\code{CohortPipeline$save()}}
     \item \href{#method-CohortPipeline-invalidate}{\code{CohortPipeline$invalidate()}}
@@ -168,12 +158,7 @@ dimensions and column names must match the cached base table.
 Otherwise the constructor installs \code{dt} as the root cohort.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$new(
-  dt = NULL,
-  cache_file = NULL,
-  label = NULL,
-  auto_validate = FALSE
-)}
+    \preformatted{CohortPipeline$new(dt = NULL, cache_file = NULL, label = NULL)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
@@ -189,101 +174,16 @@ divergent steps recompute. If the file does not exist, the
 constructor builds fresh state, and \verb{$save()} writes to this
 path. In a script, put \code{on.exit(cp$save(), add = TRUE)} near the
 top.}
-      \item{\code{label}}{Optional character. Display label for the root cohort
-(used in CONSORT diagrams and \verb{$list_cohorts()}). Defaults to
-\code{"Cohort participants"}. A warm cache load refreshes the label
-silently, so you may change the label between runs.}
-      \item{\code{auto_validate}}{Logical. When \code{TRUE}, the pipeline calls
-\verb{$validate()} after every \verb{$new_cohort()} and \verb{$set_artifact()}
-call. A schema mismatch then stops at the failure site. It does
-not accumulate until the next manual \verb{$validate()}. Defaults to
-\code{FALSE}.}
+      \item{\code{label}}{Optional character. Display label for the root cohort.
+Defaults to \code{"Cohort participants"}. The pipeline stores the label
+with the cohort, and no method returns it. A warm cache load
+refreshes the label silently, so you may change the label between
+runs.}
     }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
     A new \code{CohortPipeline} instance.
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-declare_schema"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-declare_schema}{}}}
-\subsection{\code{CohortPipeline$declare_schema()}}{
-  Declare a column-type / level / NA contract for a branch. Validation
-runs only when you call \verb{$validate()}. With \code{auto_validate = TRUE}
-at construction, the pipeline calls \verb{$validate()} for you.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$declare_schema(branch, schema = NULL, from = NULL)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{branch}}{Character. Branch name to attach the schema to.}
-      \item{\code{schema}}{Named list. Each element describes one column with
-fields:
-\itemize{
-\item \code{type}: one of \code{"integer"}, \code{"numeric"}, \code{"factor"}, \code{"logical"},
-\code{"Date"}, \code{"character"}.
-\item \code{levels} (factor only): expected \code{levels()} vector.
-\item \code{na}: if \code{FALSE}, the column MUST contain no \code{NA}s.
-}}
-      \item{\code{from}}{Optional character. If you supply \code{from}, the new schema
-starts as a copy of the schema attached to \code{from}. The entries in
-\code{schema} then merge on top.}
-    }
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    The pipeline (invisibly).
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-validate"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-validate}{}}}
-\subsection{\code{CohortPipeline$validate()}}{
-  Validate every declared schema against the included rows of its
-branch. Throws one error that lists every mismatch found.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$validate()}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    The pipeline (invisibly), if validation passes.
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-list_schemas"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-list_schemas}{}}}
-\subsection{\code{CohortPipeline$list_schemas()}}{
-  Tabulate the names and column counts of all declared schemas.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$list_schemas()}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    A \code{data.table} with columns \code{branch} and \code{n_cols}.
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-get_schemas"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-get_schemas}{}}}
-\subsection{\code{CohortPipeline$get_schemas()}}{
-  Return the raw schema list for inspection.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$get_schemas()}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    A named list of schemas.
   }
 }
 
@@ -304,9 +204,9 @@ Later exclusions in the parent do not propagate to the child.
     \describe{
       \item{\code{name}}{Character. Name of the new cohort.}
       \item{\code{from}}{Character. Name of the parent cohort.}
-      \item{\code{label}}{Optional character. Display label for the cohort
-(used in CONSORT diagrams and \verb{$list_cohorts()}); defaults to
-\code{name}. A cache replay may refresh it silently.}
+      \item{\code{label}}{Optional character. Display label for the cohort.
+Defaults to \code{name}. The pipeline stores the label with the cohort,
+and no method returns it. A cache replay may refresh it silently.}
     }
     \if{html}{\out{</div>}}
   }
@@ -556,101 +456,6 @@ parent only. The table does not duplicate it.
   \subsection{Returns}{
     A \code{data.table} with columns \code{branch}, \code{parent}, \code{step},
 \code{reason}, \code{expr_str}, \code{n_excluded}, \code{n_remaining}.
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-draw_consort_panels"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-draw_consort_panels}{}}}
-\subsection{\code{CohortPipeline$draw_consort_panels()}}{
-  Render one or more CONSORT panels for cohort flows. Each panel
-walks a sequence of cohort names. It lumps the named cohorts'
-exclusion steps into bullet blocks.
-
-Most users want \verb{$plot()} instead. \verb{$plot()} auto-discovers every
-root-to-leaf path in the tree and lays them out automatically.
-\verb{$draw_consort_panels()} is the manual route for custom layouts
-and labels.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$draw_consort_panels(
-  panels,
-  file = NULL,
-  ncol = NULL,
-  width = NULL,
-  height = NULL,
-  text_width = 40,
-  title_fontsize = 14
-)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{panels}}{A named list. Each element takes one of two forms:
-\itemize{
-\item a character vector of cohort names, which is the panel's main
-flow; or
-\item a list with a \code{flow} component (character) and an optional
-\code{side_branches} component. \code{side_branches} is a named
-character vector of identity-only branches that merge into the
-spine.
-}}
-      \item{\code{file}}{Optional character path. If you supply a path, the
-method writes the rendered plot to a \code{.pdf} or \code{.png} file.
-Otherwise the method draws the plot on the active device.}
-      \item{\code{ncol}}{Optional integer. Number of panels per row.}
-      \item{\code{width, height}}{Optional numeric (inches). File dimensions.}
-      \item{\code{text_width}}{Integer. Wrap width for box text.}
-      \item{\code{title_fontsize}}{Numeric. Title fontsize for each panel.}
-    }
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    A list of grobs (invisibly).
-  }
-}
-
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CohortPipeline-plot"></a>}}
-\if{latex}{\out{\hypertarget{method-CohortPipeline-plot}{}}}
-\subsection{\code{CohortPipeline$plot()}}{
-  Plot a CONSORT diagram of the cohort tree.
-
-With no arguments, plots one panel per cohort. Each panel walks
-the root-to-cohort path automatically. It uses cohort names as box
-labels. With one or more cohort names, plots only those.
-
-This is the default convenience entry point. Use
-\verb{$draw_consort_panels()} for custom labels or layouts.
-  \subsection{Usage}{
-    \if{html}{\out{<div class="r">}}
-    \preformatted{CohortPipeline$plot(
-  cohorts = NULL,
-  file = NULL,
-  ncol = NULL,
-  width = NULL,
-  height = NULL,
-  text_width = 40,
-  title_fontsize = 14
-)}
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Arguments}{
-    \if{html}{\out{<div class="arguments">}}
-    \describe{
-      \item{\code{cohorts}}{Optional character vector of cohort names. If you
-omit it, the method plots every cohort.}
-      \item{\code{file}}{Optional \code{.pdf}/\code{.png} path. If you supply a path, the
-method writes the plot to that file. Otherwise the method draws
-the plot on the active device.}
-      \item{\code{ncol, width, height, text_width, title_fontsize}}{Optional layout
-overrides; see \verb{$draw_consort_panels()}.}
-    }
-    \if{html}{\out{</div>}}
-  }
-  \subsection{Returns}{
-    A list of grobs (invisibly).
   }
 }
 

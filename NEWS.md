@@ -1,3 +1,7 @@
+# Version 2026.11.17
+
+- `CohortPipeline` no longer validates column schemas or draws CONSORT diagrams, because no project calls those methods. This release removes `$declare_schema()`, `$validate()`, `$list_schemas()`, `$get_schemas()`, `$draw_consort_panels()`, `$plot()` and the `auto_validate` argument of `$new()`. The package no longer imports grDevices, grid, gridExtra or tools. Another package is to draw the CONSORT diagram from the `$consort()` table. If you use a removed method, stay on version 2026.11.16 (commit b6fbef8).
+
 # Version 2026.11.16
 
 - `CohortPipeline$get_everyone()` gave excluded rows the wrong reason when included rows came between them (#1). It now looks up each row's own step.

@@ -171,41 +171,6 @@ test_that("set_artifact callbacks may freely mutate the dt argument", {
   expect_equal(cp$get_artifact("root", "mutated_dt")$age[1], 34)
 })
 
-test_that("schemas validate types, levels, and NA constraints", {
-  cp <- CohortPipeline$new(make_test_dt())
-  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-  cp$exclude_and_track("root", "Missing age", "is.na(age)")
-  cp$declare_schema(
-    "root",
-    schema = list(
-      age = list(type = "numeric", na = FALSE),
-      sex = list(type = "character", na = FALSE)
-    )
-  )
-  expect_message(cp$validate(), "schemas passed")
-
-  # Add a wrong-type spec
-  cp$declare_schema(
-    "root",
-    schema = list(
-      age = list(type = "integer", na = FALSE)
-    ),
-    from = "root"
-  )
-  expect_error(cp$validate(), "expected integer")
-})
-
-test_that("auto_validate raises on schema mismatch at the failure site", {
-  cp <- CohortPipeline$new(make_test_dt(), auto_validate = TRUE)
-  cp$declare_schema(
-    "root",
-    schema = list(
-      sex = list(type = "character", na = FALSE) # NAs present!
-    )
-  )
-  expect_error(cp$new_cohort("foo", from = "root"), "unexpected NAs")
-})
-
 test_that("list_cohorts and consort return tidy data.tables", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
@@ -271,30 +236,6 @@ test_that("exclude_and_track rejects non-logical predicate results", {
   cp$exclude_and_track("root", "Under 18", "age < 18")
   expect_equal(cp$n_included("root"), 8L)
 })
-
-test_that("plot() defaults to every cohort regardless of freeze state", {
-  cp <- CohortPipeline$new(make_test_dt())
-  cp$exclude_and_track("root", "Missing sex", "is.na(sex)")
-
-  pdf(file = tempfile(fileext = ".pdf"))
-  expect_silent(cp$plot())
-  dev.off()
-
-  # Adding an unfrozen leaf cohort -- it must still be included.
-  cp$new_cohort("child", from = "root")
-  pdf(file = tempfile(fileext = ".pdf"))
-  expect_silent(cp$plot())
-  dev.off()
-
-  # Explicit cohort selection still works.
-  pdf(file = tempfile(fileext = ".pdf"))
-  expect_silent(cp$plot(cohorts = "child"))
-  dev.off()
-
-  # Unknown cohort is rejected.
-  expect_error(cp$plot(cohorts = "missing"), "unknown cohort")
-})
-
 
 test_that("cache_file: warm replay preserves state, divergent ops recompute", {
   cache <- tempfile(fileext = ".rds")

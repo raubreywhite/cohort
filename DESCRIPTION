@@ -1,6 +1,6 @@
 Package: cohort
 Title: Build Analytic Cohorts with Full Provenance
-Version: 2026.11.16
+Version: 2026.11.17
 Authors@R:
     c(
       person(
@@ -13,8 +13,7 @@ Authors@R:
     )
 Description: A framework for building analytic cohorts with full provenance.
     Supports branched cohort trees, per-step exclusion logging with
-    human-readable reasons, schema validation at branch boundaries, cached
-    derived artifacts on each cohort, and CONSORT diagram generation. The
+    human-readable reasons, and cached derived artifacts on each cohort. The
     framework cleanly separates cohort definition from analysis: it produces
     analytic data tables that downstream packages can consume. A shared-base
     storage strategy keeps memory flat as the cohort tree grows.
@@ -27,11 +26,7 @@ Depends: R (>= 3.5.0)
 Imports:
     data.table,
     digest,
-    grDevices,
-    grid,
-    gridExtra,
     R6,
-    tools,
     utils
 Suggests:
     knitr,

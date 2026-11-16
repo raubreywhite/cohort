@@ -11,12 +11,12 @@ Source:
 [`DESCRIPTION`](https://github.com/raubreywhite/cohort/blob/main/DESCRIPTION)
 
 White RA (2026). *cohort: Build Analytic Cohorts with Full Provenance*.
-R package version 2026.8.21, <https://www.rwhite.no/cohort/>.
+R package version 2026.11.18, <https://www.rwhite.no/cohort/>.
 
     @Manual{,
       title = {cohort: Build Analytic Cohorts with Full Provenance},
       author = {Richard Aubrey White},
       year = {2026},
-      note = {R package version 2026.8.21},
+      note = {R package version 2026.11.18},
       url = {https://www.rwhite.no/cohort/},
     }

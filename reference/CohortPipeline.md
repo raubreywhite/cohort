@@ -4,9 +4,10 @@
 with full exclusion provenance. Each branch derives from a parent
 branch. It applies a sequence of named exclusion rules to that parent.
 The class records every exclusion. Each record holds the reason, the
-predicate that produced it, and the number of subjects affected. The
-object can therefore drive a CONSORT diagram. It is also the auditable
-record of how the analytic dataset was constructed.
+predicate that produced it, and the number of subjects affected.
+`$consort()` returns these records as one table, which holds the counts
+for a CONSORT diagram. The object is also the auditable record of how
+the analytic dataset was constructed.
 
 Cohort construction stays strictly upstream of analysis. The class
 produces analytic data tables that downstream code can consume. See
@@ -77,15 +78,9 @@ can branch a frozen cohort as many times as you like.
 
 - `$n_included(cohort)`, `$n_total()` – row counts.
 
-- `$list_cohorts()`, `$list_artifacts(cohort)`, `$list_schemas()` –
-  inventories.
-
-- `$declare_schema(branch, schema, from)`, `$validate()` – column
-  contracts.
+- `$list_cohorts()`, `$list_artifacts(cohort)` – inventories.
 
 - `$consort()` – long-form exclusion log across all branches.
-
-- `$draw_consort_panels(panels, file)` – render CONSORT diagrams.
 
 - `$save(file)`, `$invalidate(cohort, artifact)` – incremental cache
   persistence and manual cache invalidation.
@@ -105,22 +100,14 @@ therefore stay serializable and auditable.
 ## See also
 
 [`vignette("cohort")`](https://www.rwhite.no/cohort/articles/cohort.md)
-for a worked example that branches a cohort, caches derived artifacts,
-declares a column schema and draws a CONSORT diagram.
+for a worked example that branches a cohort and caches derived
+artifacts.
 
 ## Methods
 
 ### Public methods
 
 - [`CohortPipeline$new()`](#method-CohortPipeline-initialize)
-
-- [`CohortPipeline$declare_schema()`](#method-CohortPipeline-declare_schema)
-
-- [`CohortPipeline$validate()`](#method-CohortPipeline-validate)
-
-- [`CohortPipeline$list_schemas()`](#method-CohortPipeline-list_schemas)
-
-- [`CohortPipeline$get_schemas()`](#method-CohortPipeline-get_schemas)
 
 - [`CohortPipeline$new_cohort()`](#method-CohortPipeline-new_cohort)
 
@@ -144,10 +131,6 @@ declares a column schema and draws a CONSORT diagram.
 
 - [`CohortPipeline$consort()`](#method-CohortPipeline-consort)
 
-- [`CohortPipeline$draw_consort_panels()`](#method-CohortPipeline-draw_consort_panels)
-
-- [`CohortPipeline$plot()`](#method-CohortPipeline-plot)
-
 - [`CohortPipeline$print()`](#method-CohortPipeline-print)
 
 - [`CohortPipeline$save()`](#method-CohortPipeline-save)
@@ -166,12 +149,7 @@ installs `dt` as the root cohort.
 
 #### Usage
 
-    CohortPipeline$new(
-      dt = NULL,
-      cache_file = NULL,
-      label = NULL,
-      auto_validate = FALSE
-    )
+    CohortPipeline$new(dt = NULL, cache_file = NULL, label = NULL)
 
 #### Arguments
 
@@ -192,104 +170,14 @@ installs `dt` as the root cohort.
 
 - `label`:
 
-  Optional character. Display label for the root cohort (used in CONSORT
-  diagrams and `$list_cohorts()`). Defaults to `"Cohort participants"`.
-  A warm cache load refreshes the label silently, so you may change the
-  label between runs.
-
-- `auto_validate`:
-
-  Logical. When `TRUE`, the pipeline calls `$validate()` after every
-  `$new_cohort()` and `$set_artifact()` call. A schema mismatch then
-  stops at the failure site. It does not accumulate until the next
-  manual `$validate()`. Defaults to `FALSE`.
+  Optional character. Display label for the root cohort. Defaults to
+  `"Cohort participants"`. The pipeline stores the label with the
+  cohort, and no method returns it. A warm cache load refreshes the
+  label silently, so you may change the label between runs.
 
 #### Returns
 
 A new `CohortPipeline` instance.
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$declare_schema()`
-
-Declare a column-type / level / NA contract for a branch. Validation
-runs only when you call `$validate()`. With `auto_validate = TRUE` at
-construction, the pipeline calls `$validate()` for you.
-
-#### Usage
-
-    CohortPipeline$declare_schema(branch, schema = NULL, from = NULL)
-
-#### Arguments
-
-- `branch`:
-
-  Character. Branch name to attach the schema to.
-
-- `schema`:
-
-  Named list. Each element describes one column with fields:
-
-  - `type`: one of `"integer"`, `"numeric"`, `"factor"`, `"logical"`,
-    `"Date"`, `"character"`.
-
-  - `levels` (factor only): expected
-    [`levels()`](https://rdrr.io/r/base/levels.html) vector.
-
-  - `na`: if `FALSE`, the column MUST contain no `NA`s.
-
-- `from`:
-
-  Optional character. If you supply `from`, the new schema starts as a
-  copy of the schema attached to `from`. The entries in `schema` then
-  merge on top.
-
-#### Returns
-
-The pipeline (invisibly).
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$validate()`
-
-Validate every declared schema against the included rows of its branch.
-Throws one error that lists every mismatch found.
-
-#### Usage
-
-    CohortPipeline$validate()
-
-#### Returns
-
-The pipeline (invisibly), if validation passes.
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$list_schemas()`
-
-Tabulate the names and column counts of all declared schemas.
-
-#### Usage
-
-    CohortPipeline$list_schemas()
-
-#### Returns
-
-A `data.table` with columns `branch` and `n_cols`.
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$get_schemas()`
-
-Return the raw schema list for inspection.
-
-#### Usage
-
-    CohortPipeline$get_schemas()
-
-#### Returns
-
-A named list of schemas.
 
 ------------------------------------------------------------------------
 
@@ -315,9 +203,9 @@ exclusions in the parent do not propagate to the child.
 
 - `label`:
 
-  Optional character. Display label for the cohort (used in CONSORT
-  diagrams and `$list_cohorts()`); defaults to `name`. A cache replay
-  may refresh it silently.
+  Optional character. Display label for the cohort. Defaults to `name`.
+  The pipeline stores the label with the cohort, and no method returns
+  it. A cache replay may refresh it silently.
 
 #### Returns
 
@@ -564,116 +452,6 @@ does not duplicate it.
 
 A `data.table` with columns `branch`, `parent`, `step`, `reason`,
 `expr_str`, `n_excluded`, `n_remaining`.
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$draw_consort_panels()`
-
-Render one or more CONSORT panels for cohort flows. Each panel walks a
-sequence of cohort names. It lumps the named cohorts' exclusion steps
-into bullet blocks.
-
-Most users want `$plot()` instead. `$plot()` auto-discovers every
-root-to-leaf path in the tree and lays them out automatically.
-`$draw_consort_panels()` is the manual route for custom layouts and
-labels.
-
-#### Usage
-
-    CohortPipeline$draw_consort_panels(
-      panels,
-      file = NULL,
-      ncol = NULL,
-      width = NULL,
-      height = NULL,
-      text_width = 40,
-      title_fontsize = 14
-    )
-
-#### Arguments
-
-- `panels`:
-
-  A named list. Each element takes one of two forms:
-
-  - a character vector of cohort names, which is the panel's main flow;
-    or
-
-  - a list with a `flow` component (character) and an optional
-    `side_branches` component. `side_branches` is a named character
-    vector of identity-only branches that merge into the spine.
-
-- `file`:
-
-  Optional character path. If you supply a path, the method writes the
-  rendered plot to a `.pdf` or `.png` file. Otherwise the method draws
-  the plot on the active device.
-
-- `ncol`:
-
-  Optional integer. Number of panels per row.
-
-- `width, height`:
-
-  Optional numeric (inches). File dimensions.
-
-- `text_width`:
-
-  Integer. Wrap width for box text.
-
-- `title_fontsize`:
-
-  Numeric. Title fontsize for each panel.
-
-#### Returns
-
-A list of grobs (invisibly).
-
-------------------------------------------------------------------------
-
-### `CohortPipeline$plot()`
-
-Plot a CONSORT diagram of the cohort tree.
-
-With no arguments, plots one panel per cohort. Each panel walks the
-root-to-cohort path automatically. It uses cohort names as box labels.
-With one or more cohort names, plots only those.
-
-This is the default convenience entry point. Use
-`$draw_consort_panels()` for custom labels or layouts.
-
-#### Usage
-
-    CohortPipeline$plot(
-      cohorts = NULL,
-      file = NULL,
-      ncol = NULL,
-      width = NULL,
-      height = NULL,
-      text_width = 40,
-      title_fontsize = 14
-    )
-
-#### Arguments
-
-- `cohorts`:
-
-  Optional character vector of cohort names. If you omit it, the method
-  plots every cohort.
-
-- `file`:
-
-  Optional `.pdf`/`.png` path. If you supply a path, the method writes
-  the plot to that file. Otherwise the method draws the plot on the
-  active device.
-
-- `ncol, width, height, text_width, title_fontsize`:
-
-  Optional layout overrides; see `$draw_consort_panels()`.
-
-#### Returns
-
-A list of grobs (invisibly).
 
 ------------------------------------------------------------------------
 

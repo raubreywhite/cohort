@@ -12,7 +12,8 @@ so branching never copies the underlying data values.
 ### Exclusion provenance
 
 `cohort` logs every exclusion with a human-readable reason and a
-serializable string predicate, ready to render as a CONSORT diagram.
+serializable string predicate. `$consort()` returns the whole log as one
+table.
 
 03
 

@@ -11,7 +11,7 @@ We start with a small simulated dataset.
 
 ``` r
 library(cohort)
-#> cohort 2026.8.21
+#> cohort 2026.11.18
 #> https://www.rwhite.no/cohort/
 library(data.table)
 #> 
@@ -47,9 +47,9 @@ never mutates your data table, whatever operations you run on it.
 The `cache_file` argument enables incremental re-execution. On the first
 run the pipeline writes a snapshot to disk. On later runs it restores
 the snapshot, and matching operations replay instantly with no
-recomputation. The `label` argument is the cohort’s display label in
-CONSORT diagrams, and defaults to `"Cohort participants"`. The
-identifier `"root"` is universal, and code always uses it.
+recomputation. The `label` argument defaults to `"Cohort participants"`.
+The pipeline stores the label with the cohort, and no method returns it.
+The identifier `"root"` is universal, and code always uses it.
 
 ### Step 2: apply root-level exclusions
 
@@ -78,10 +78,8 @@ cp$new_cohort("adults_grp_a", from = "root",
 cp$exclude_and_track("adults_grp_a", "Group not a", "grp != 'a'")
 ```
 
-Your code references identifiers (`"adults_female"`, `"adults_grp_a"`).
-Figures show labels. Call `new_cohort()` again with a different label.
-The pipeline updates the label silently and does not invalidate the
-cache.
+Your code references identifiers (`"adults_female"`, `"adults_grp_a"`),
+never labels.
 
 A branch starts identical to its parent at the moment of branching.
 Sibling branches evolve independently.
@@ -199,56 +197,6 @@ If you use an analysis-orchestration package, register each artifact as
 a named data entry — typically one short loop over
 `cp$list_artifacts()`.
 
-## Schemas
-
-Use schemas to declare a column-type contract on a branch and verify it
-before downstream code consumes the data.
-
-``` r
-cp$declare_schema("adults_female", schema = list(
-  age = list(type = "numeric",   na = FALSE),
-  sex = list(type = "character", na = FALSE)
-))
-cp$validate()
-#> [validate] All CohortPipeline schemas passed
-```
-
-If a column is missing, has the wrong type, or carries unexpected `NA`s,
-`$validate()` throws one error that lists every problem. Pass
-`auto_validate = TRUE` to `CohortPipeline$new()` to fail at the failure
-site. Every `$new_cohort()` and `$set_artifact()` call then validates
-after it runs.
-
-## CONSORT diagrams
-
-The simplest way to draw CONSORT diagrams is `$plot()`. With no
-arguments it renders one panel per cohort. Each panel walks the
-root-to-cohort path, and cohort names become box labels.
-
-``` r
-cp$plot()
-```
-
-![](cohort_files/figure-html/consort-1.png)
-
-You can name specific cohorts:
-
-``` r
-cp$plot(c("adults_female", "adults_grp_a"))
-```
-
-![](cohort_files/figure-html/unnamed-chunk-11-1.png)
-
-Or save to disk:
-
-``` r
-cp$plot(file = "Figure_1_CONSORT.pdf")
-```
-
-For full control over labels, panel titles, side branches and layout,
-use `$draw_consort_panels()` (see
-[`?CohortPipeline`](https://www.rwhite.no/cohort/reference/CohortPipeline.md)).
-
 ## How the cache decides what to recompute
 
 The worked example already uses `cache_file` and `on.exit(cp$save())`.
@@ -259,7 +207,6 @@ operation against the cached log.
 |---------------------|----------------------------------|
 | `exclude_and_track` | `(branch, reason, expr_str)`     |
 | `new_cohort`        | `(name, from)`                   |
-| `declare_schema`    | overwrites; not cached           |
 | `set_artifact`      | `(name, from, body(fn), argset)` |
 
 A match advances the replay cursor with no work done. A mismatch

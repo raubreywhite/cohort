@@ -143,6 +143,7 @@ CohortPipeline <- R6::R6Class(
     ) {
       private$nodes <- list()
       private$cache_file <- cache_file
+      value <- NULL
 
       if (!is.null(cache_file) && file.exists(cache_file)) {
         snap <- readRDS(cache_file)
@@ -180,20 +181,27 @@ CohortPipeline <- R6::R6Class(
           # Labels are presentation, not part of the cohort identity.
           if (!is.null(label) && "root" %in% names(private$nodes)) {
             private$nodes$root$label <- label
+            value <- label
           }
         } else {
           warning(
             "CohortPipeline: supplied 'dt' content does not match ",
             "the cached base table (digest mismatch); discarding cache ",
-            "and rebuilding from scratch."
+            "and rebuilding from scratch.",
+            call. = FALSE
           )
           private$install_base(dt, label = label %||% "Cohort participants")
           private$base_dt_hash <- dt_hash
+          value <- dt_hash
         }
       } else if (!is.null(dt)) {
         private$install_base(dt, label = label %||% "Cohort participants")
         private$base_dt_hash <- digest::digest(dt, algo = "spookyhash")
+        value <- private$base_dt_hash
       }
+      # $new() discards this value. It keeps the value of the last
+      # assignment in each branch, which version 2026.11.17 returned.
+      return(invisible(value))
     },
 
     #' @description
@@ -280,7 +288,7 @@ CohortPipeline <- R6::R6Class(
       # must not change again, otherwise sibling branches would have
       # silently different parent states.
       private$nodes[[from]]$frozen <- TRUE
-      invisible(self)
+      return(invisible(self))
     },
 
     #' @description
@@ -398,7 +406,7 @@ CohortPipeline <- R6::R6Class(
       )
       node$replay_cursor <- step_num
       private$nodes[[branch]] <- node
-      invisible(self)
+      return(invisible(self))
     },
 
     #' @description
@@ -484,7 +492,7 @@ CohortPipeline <- R6::R6Class(
       # silently invalidate the cached value.
       node$frozen <- TRUE
       private$nodes[[from]] <- node
-      invisible(self)
+      return(invisible(self))
     },
 
     #' @description
@@ -499,7 +507,7 @@ CohortPipeline <- R6::R6Class(
       }
       node <- private$nodes[[cohort]]
       idx <- which(node$status == 0L)
-      data.table::copy(private$base_dt[idx])
+      return(data.table::copy(private$base_dt[idx]))
     },
 
     #' @description
@@ -527,7 +535,7 @@ CohortPipeline <- R6::R6Class(
       )
       out <- data.table::copy(private$base_dt)
       out[, .cohort_status := status_chr]
-      out
+      return(out)
     },
 
     #' @description
@@ -551,7 +559,7 @@ CohortPipeline <- R6::R6Class(
           call. = FALSE
         )
       }
-      node$artifacts[[name]]
+      return(node$artifacts[[name]])
     },
 
     #' @description
@@ -562,14 +570,17 @@ CohortPipeline <- R6::R6Class(
       if (!cohort %in% names(private$nodes)) {
         stop("n_included: unknown cohort '", cohort, "'.", call. = FALSE)
       }
-      sum(private$nodes[[cohort]]$status == 0L)
+      return(sum(private$nodes[[cohort]]$status == 0L))
     },
 
     #' @description
     #' Total number of rows in the shared base table.
     #' @return Integer.
     n_total = function() {
-      if (is.null(private$base_dt)) 0L else nrow(private$base_dt)
+      if (is.null(private$base_dt)) {
+        return(0L)
+      }
+      return(nrow(private$base_dt))
     },
 
     #' @description
@@ -593,11 +604,11 @@ CohortPipeline <- R6::R6Class(
         ))
       }
       n_total <- self$n_total()
-      data.table::rbindlist(lapply(names(private$nodes), function(nm) {
+      return(data.table::rbindlist(lapply(names(private$nodes), function(nm) {
         node <- private$nodes[[nm]]
         n_inc <- sum(node$status == 0L)
         own_n_steps <- length(node$log_entries) - node$branched_at_log_len
-        data.table::data.table(
+        return(data.table::data.table(
           name = nm,
           parent = node$parent,
           n_total = n_total,
@@ -606,8 +617,8 @@ CohortPipeline <- R6::R6Class(
           n_own_steps = own_n_steps,
           n_artifacts = length(node$artifacts),
           frozen = isTRUE(node$frozen)
-        )
-      }))
+        ))
+      })))
     },
 
     #' @description
@@ -620,7 +631,10 @@ CohortPipeline <- R6::R6Class(
         stop("list_artifacts: unknown cohort '", cohort, "'.", call. = FALSE)
       }
       nms <- names(private$nodes[[cohort]]$artifacts)
-      if (is.null(nms)) character() else nms
+      if (is.null(nms)) {
+        return(character())
+      }
+      return(nms)
     },
 
     #' @description
@@ -634,20 +648,20 @@ CohortPipeline <- R6::R6Class(
       logs <- list()
       for (nm in names(private$nodes)) {
         node <- private$nodes[[nm]]
-        own_idx <- seq_len(length(node$log_entries))[
+        own_idx <- seq_along(node$log_entries)[
           seq_along(node$log_entries) > node$branched_at_log_len
         ]
         if (length(own_idx) == 0L) {
           next
         }
         own_entries <- lapply(node$log_entries[own_idx], function(e) {
-          data.table::data.table(
+          return(data.table::data.table(
             step = e$step,
             reason = e$reason,
             expr_str = e$expr_str %||% NA_character_,
             n_excluded = e$n_excluded,
             n_remaining = e$n_remaining
-          )
+          ))
         })
         log <- data.table::rbindlist(own_entries)
         log[, branch := nm]
@@ -678,7 +692,7 @@ CohortPipeline <- R6::R6Class(
           "n_remaining"
         )
       )
-      out
+      return(out)
     },
 
     #' @description
@@ -727,7 +741,7 @@ CohortPipeline <- R6::R6Class(
           cat(sprintf("%s  $ %s\n", indent, art))
         }
       }
-      invisible(self)
+      return(invisible(self))
     },
 
     #' @description
@@ -757,7 +771,7 @@ CohortPipeline <- R6::R6Class(
         ),
         file = path
       )
-      invisible(self)
+      return(invisible(self))
     },
 
     #' @description
@@ -799,7 +813,7 @@ CohortPipeline <- R6::R6Class(
         node$artifact_meta <- node$artifact_meta[keep]
         private$nodes[[cohort]] <- node
       }
-      invisible(self)
+      return(invisible(self))
     }
   ),
   private = list(
@@ -828,6 +842,7 @@ CohortPipeline <- R6::R6Class(
           replay_cursor = 0L
         )
       )
+      return(invisible(private$nodes))
     },
 
     # All transitive descendants of a cohort.
@@ -840,7 +855,7 @@ CohortPipeline <- R6::R6Class(
           kids <- vapply(
             private$nodes,
             function(n) {
-              !is.na(n$parent) && identical(n$parent, cur)
+              return(!is.na(n$parent) && identical(n$parent, cur))
             },
             logical(1L)
           )
@@ -850,7 +865,7 @@ CohortPipeline <- R6::R6Class(
         }
         to_check <- next_check
       }
-      result
+      return(result)
     },
 
     # Drop a cohort and every descendant from the node store.
@@ -858,6 +873,7 @@ CohortPipeline <- R6::R6Class(
       for (n in c(name, private$.descendants(name))) {
         private$nodes[[n]] <- NULL
       }
+      return(invisible(NULL))
     },
 
     # Truncate `branch`'s log at absolute index `cursor`, replay the kept
@@ -907,6 +923,7 @@ CohortPipeline <- R6::R6Class(
           private$nodes[[d]] <- NULL
         }
       }
+      return(invisible(NULL))
     }
   )
 )

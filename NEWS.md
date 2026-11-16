@@ -1,3 +1,7 @@
+# Version 2026.11.18
+
+- No change in behaviour: the code now passes the shared lint gate. One message changes: the `CohortPipeline$new()` warning for a `dt` that does not match the cache no longer starts with `In initialize(...) :`.
+
 # Version 2026.11.17
 
 - `CohortPipeline` no longer validates column schemas or draws CONSORT diagrams, because no project calls those methods. This release removes `$declare_schema()`, `$validate()`, `$list_schemas()`, `$get_schemas()`, `$draw_consort_panels()`, `$plot()` and the `auto_validate` argument of `$new()`. The package no longer imports grDevices, grid, gridExtra or tools. Another package is to draw the CONSORT diagram from the `$consort()` table. If you use a removed method, stay on version 2026.11.16 (commit b6fbef8).

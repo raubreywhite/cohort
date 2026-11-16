@@ -12,3 +12,13 @@ jobs:
     permissions:
       contents: write
     uses: raubreywhite/rwtemplate/.github/workflows/r-package.yml@3a02a568840bf9d6d41f76e139922eb658da0e13
+    with:
+      # cyclocomp_linter: the R6Class() call is one expression, so its
+      # complexity is the sum over all methods. Splitting the class is a
+      # separate change.
+      # undesirable_function_linter: the cache file format is RDS, so
+      # $new() reads it with readRDS() and $save() writes it with saveRDS().
+      # A change to qs2 invalidates every existing cache file.
+      lint-allowlist: |
+        R/cohort_pipeline.R:cyclocomp_linter
+        R/cohort_pipeline.R:undesirable_function_linter

@@ -1,6 +1,6 @@
 Package: cohort
 Title: Build Analytic Cohorts with Full Provenance
-Version: 2026.11.17
+Version: 2026.11.18
 Authors@R:
     c(
       person(

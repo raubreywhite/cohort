@@ -1,3 +1,7 @@
+# Version 2026.11.16
+
+- `CohortPipeline$get_everyone()` gave excluded rows the wrong reason when included rows came between them (#1). It now looks up each row's own step.
+
 # Version 2026.8.21
 
 - `R/0_env.R` is deleted. It existed only to declare `.cohort_status` in

@@ -673,7 +673,11 @@ CohortPipeline <- R6::R6Class(
       } else {
         vapply(node$log_entries, function(e) e$reason, character(1L))
       }
-      status_chr <- ifelse(node$status == 0L, "included", reasons[node$status])
+      status_chr <- data.table::fifelse(
+        node$status == 0L,
+        "included",
+        reasons[pmax(node$status, 1L)]
+      )
       out <- data.table::copy(private$base_dt)
       out[, .cohort_status := status_chr]
       out

@@ -129,6 +129,23 @@ test_that("get_everyone reconstructs full per-row status", {
   expect_true("Missing sex" %in% ev2$.cohort_status)
 })
 
+test_that("get_everyone labels interleaved excluded rows by their own step", {
+  # Steps A and B each catch rows on both sides of an included row.
+  d <- data.table(id = 1:7, x = c(1, 0, 2, 0, 1, 0, 2))
+  cp <- CohortPipeline$new(d)
+  cp$exclude_and_track("root", "A", "x == 1")
+  cp$exclude_and_track("root", "B", "x == 2")
+
+  ev <- cp$get_everyone("root")
+  expected <- c("A", "included", "B", "included", "A", "included", "B")
+  expect_identical(ev$.cohort_status, expected)
+
+  log <- cp$consort()
+  for (r in log$reason) {
+    expect_equal(sum(ev$.cohort_status == r), log[reason == r, n_excluded])
+  }
+})
+
 test_that("set_artifact caches results and exposes siblings", {
   cp <- CohortPipeline$new(make_test_dt())
   cp$set_artifact("n", from = "root", fn = function(dt, sib) nrow(dt))
